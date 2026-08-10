@@ -1,0 +1,24 @@
+.program wm8960_i2s_master_tx
+.side_set 2
+
+; side_set [1:0] = [LRCLK, BCLK]
+;
+; Standard I2S:
+;   - Output data while BCLK is LOW
+;   - BCLK goes HIGH to let the codec sample the bit
+;   - LRCLK changes one bit before the next channel MSB
+;   - 16 bits per channel, 64 PIO cycles per stereo frame
+
+.wrap_target
+    set x, 14        side 0b01   ; complete previous right LSB, prep left
+left_bits:
+    out pins, 1      side 0b00   ; left bits 15..1, LRCLK low
+    jmp x-- left_bits side 0b01  ; sampled on BCLK high
+    out pins, 1      side 0b10   ; left bit 0 while LRCLK already marks right
+
+    set x, 14        side 0b11   ; sample left LSB, prep right
+right_bits:
+    out pins, 1      side 0b10   ; right bits 15..1, LRCLK high
+    jmp x-- right_bits side 0b11 ; sampled on BCLK high
+    out pins, 1      side 0b00   ; right bit 0 while LRCLK already marks left
+.wrap

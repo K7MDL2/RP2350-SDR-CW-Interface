@@ -1,0 +1,23 @@
+.program wm8960_i2s_slave_rx
+
+; Receive the left 16-bit ADC channel from a standard I2S stream.
+; GPIO18 (BCLK) and GPIO19 (LRCLK) are driven by the TX state machine.
+; The WM8960 drives ADCDAT on GPIO20.
+;
+; LRCLK changes one bit before the channel MSB. Synchronize on the falling
+; LRCLK edge, discard the preceding right-channel LSB, then sample 16 bits on
+; BCLK high. The state machine runs at clk_sys and therefore has ample time
+; between the 3.072 MHz BCLK edges.
+
+.wrap_target
+    wait 1 gpio 19        ; synchronize while the right channel is active
+    wait 0 gpio 19        ; falling LRCLK: one bit before left MSB
+    wait 1 gpio 18        ; discard the previous right-channel LSB
+    wait 0 gpio 18
+    set x, 15
+capture_left:
+    wait 1 gpio 18
+    in pins, 1
+    wait 0 gpio 18
+    jmp x-- capture_left
+.wrap
