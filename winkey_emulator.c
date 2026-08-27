@@ -1617,6 +1617,21 @@ bool winkey_emulator_get_paddle_swap(void)
     return PADDLE_SWAP;
 }
 
+void winkey_emulator_set_midi_ptt_enabled(bool enabled)
+{
+    if (enabled) {
+        pin_config |= 0x01u;
+    } else {
+        pin_config &= (uint8_t)~0x01u;
+        ptt_off();
+    }
+}
+
+bool winkey_emulator_get_midi_ptt_enabled(void)
+{
+    return PTT_ENABLED;
+}
+
 void winkey_emulator_set_weight(uint8_t percent)
 {
     weight = percent > 100u ? 100u : percent;

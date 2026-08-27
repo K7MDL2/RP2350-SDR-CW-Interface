@@ -1,0 +1,38 @@
+<?xml version="1.0" standalone="yes"?>
+<ExportMidi2Cat>
+  <xs:schema id="ExportMidi2Cat" xmlns="" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xs:element name="ExportMidi2Cat" msdata:IsDataSet="true" msdata:UseCurrentLocale="true">
+      <xs:complexType>
+        <xs:choice minOccurs="0" maxOccurs="unbounded">
+          <xs:element name="RP2350_x0020_SDR_x0020_MIDI">
+            <xs:complexType>
+              <xs:sequence>
+                <xs:element name="MidiControlId" type="xs:int" />
+                <xs:element name="MidiControlName" type="xs:string" minOccurs="0" />
+                <xs:element name="MidiControlType" type="xs:int" minOccurs="0" />
+                <xs:element name="MinValue" type="xs:int" minOccurs="0" />
+                <xs:element name="MaxValue" type="xs:int" minOccurs="0" />
+                <xs:element name="CatCmdId" type="xs:int" minOccurs="0" />
+                <xs:element name="MidiOutCmdDown" type="xs:string" minOccurs="0" />
+                <xs:element name="MidiOutCmdUp" type="xs:string" minOccurs="0" />
+                <xs:element name="MidiOutCmdSetValue" type="xs:string" minOccurs="0" />
+              </xs:sequence>
+            </xs:complexType>
+          </xs:element>
+        </xs:choice>
+      </xs:complexType>
+      <xs:unique name="Constraint1" msdata:PrimaryKey="true">
+        <xs:selector xpath=".//RP2350_x0020_SDR_x0020_MIDI" />
+        <xs:field xpath="MidiControlId" />
+      </xs:unique>
+    </xs:element>
+  </xs:schema>
+  <RP2350_x0020_SDR_x0020_MIDI>
+    <MidiControlId>17</MidiControlId>
+    <MidiControlName>CW Straight Key</MidiControlName>
+    <MidiControlType>1</MidiControlType>
+    <MinValue>0</MinValue>
+    <MaxValue>127</MaxValue>
+    <CatCmdId>800</CatCmdId>
+  </RP2350_x0020_SDR_x0020_MIDI>
+</ExportMidi2Cat>

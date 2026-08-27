@@ -99,6 +99,10 @@ static void show_status(void)
         "paddle-swap: %s\r\n",
         winkey_emulator_get_paddle_swap() ? "on" : "off"
     );
+    tx_printf(
+        "midi-ptt: %s\r\n",
+        winkey_emulator_get_midi_ptt_enabled() ? "on" : "off"
+    );
     tx_printf("weight: %u%%\r\n", winkey_emulator_get_weight());
     tx_printf(
         "decoder: %s\r\n",
@@ -132,6 +136,8 @@ static void show_help(void)
         "  set output headphones|speakers|both\r\n"
         "  set mode iambic-a|iambic-b|ultimatic|bug\r\n"
         "  set paddle-swap on|off\r\n"
+        "  set midi-ptt on|off\r\n"
+        "  midi-ptt on|off\r\n"
         "  set weight 0..100\r\n"
         "  set decoder on|off\r\n"
         "  set decoder-frequency 300..1200\r\n"
@@ -312,6 +318,16 @@ static void command_set(const char *setting, const char *argument)
             return;
         }
         tx_printf("OK paddle-swap=%s\r\n", argument);
+    } else if (strcmp(setting, "midi-ptt") == 0) {
+        if (strcmp(argument, "on") == 0) {
+            winkey_emulator_set_midi_ptt_enabled(true);
+        } else if (strcmp(argument, "off") == 0) {
+            winkey_emulator_set_midi_ptt_enabled(false);
+        } else {
+            tx_text("ERROR midi-ptt must be on or off\r\n");
+            return;
+        }
+        tx_printf("OK midi-ptt=%s\r\n", argument);
     } else {
         tx_printf("ERROR unknown setting: %s\r\n", setting);
     }
@@ -335,6 +351,8 @@ static void execute_command(char *line)
         show_help();
     } else if (strcmp(command, "set") == 0) {
         command_set(setting, argument);
+    } else if (strcmp(command, "midi-ptt") == 0 && argument == NULL) {
+        command_set("midi-ptt", setting);
     } else if (strcmp(command, "save") == 0 && setting == NULL) {
         settings_save_request_t result = settings_storage_request_save();
         if (result == SETTINGS_SAVE_ACCEPTED) {

@@ -28,6 +28,8 @@ winkey_mode_t winkey_emulator_get_mode(void);
 const char *winkey_emulator_mode_name(winkey_mode_t mode);
 void winkey_emulator_set_paddle_swap(bool enabled);
 bool winkey_emulator_get_paddle_swap(void);
+void winkey_emulator_set_midi_ptt_enabled(bool enabled);
+bool winkey_emulator_get_midi_ptt_enabled(void);
 void winkey_emulator_set_weight(uint8_t percent);
 uint8_t winkey_emulator_get_weight(void);
 void winkey_emulator_export_eeprom(

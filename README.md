@@ -459,6 +459,9 @@ need to be changed.
 
 ## MIDI
 
+For a short setup and test procedure, including RX2/VAC2 monitoring, see
+[Using the CW keyer with Thetis](THETIS-CW-SETUP.md).
+
 The firmware sends the following events on MIDI channel 10:
 
 | Event | MIDI message |
@@ -470,6 +473,9 @@ The firmware sends the following events on MIDI channel 10:
 The virtual MIDI PTT is enabled in the factory defaults. It sends note 18 over
 USB and does not require a physical PTT GPIO connection. A previously saved
 WinKey pin configuration remains authoritative after a firmware update.
+On the text console, use `midi-ptt on` to enable it for the current session,
+then use `save` (or double-click the encoder) to retain the setting. Use
+`show` to check the current `midi-ptt` state.
 
 For a manual key-down test, send the following MIDI message:
 
