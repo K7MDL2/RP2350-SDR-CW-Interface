@@ -12,7 +12,8 @@
 #include "winkey_emulator.h"
 
 #define SETTINGS_MAGIC             0x52424b59u /* "RBKY" */
-#define SETTINGS_FORMAT_VERSION    2u
+#define SETTINGS_FORMAT_VERSION    3u
+#define SETTINGS_PREVIOUS_VERSION  2u
 #define SETTINGS_LEGACY_VERSION    1u
 #define SETTINGS_RECORD_BYTES      (2u * FLASH_PAGE_SIZE)
 #define SETTINGS_STORAGE_BYTES     (2u * FLASH_SECTOR_SIZE)
@@ -28,7 +29,7 @@ typedef struct {
     uint8_t sidetone_volume_percent;
     uint16_t sidetone_frequency_hz;
     uint8_t output_mode;
-    uint8_t reserved;
+    uint8_t midi_ptt_mode;
     uint8_t winkey_eeprom[WINKEY_PERSISTENT_EEPROM_SIZE];
 } settings_payload_t;
 
@@ -123,6 +124,7 @@ static bool payload_is_sane(const settings_payload_t *payload)
            payload->sidetone_frequency_hz <= 1200u &&
            payload->output_mode >= WM8960_OUTPUT_HEADPHONES &&
            payload->output_mode <= WM8960_OUTPUT_BOTH &&
+           payload->midi_ptt_mode <= WINKEY_MIDI_PTT_THETIS &&
            payload->winkey_eeprom[0] == 0xa5u;
 }
 
@@ -133,6 +135,17 @@ static bool legacy_payload_is_sane(
            payload->sidetone_volume_percent <= 100u &&
            payload->sidetone_frequency_hz >= 300u &&
            payload->sidetone_frequency_hz <= 1200u &&
+           payload->winkey_eeprom[0] == 0xa5u;
+}
+
+static bool previous_payload_is_sane(const settings_payload_t *payload)
+{
+    return payload->master_volume_percent <= 100u &&
+           payload->sidetone_volume_percent <= 100u &&
+           payload->sidetone_frequency_hz >= 300u &&
+           payload->sidetone_frequency_hz <= 1200u &&
+           payload->output_mode >= WM8960_OUTPUT_HEADPHONES &&
+           payload->output_mode <= WM8960_OUTPUT_BOTH &&
            payload->winkey_eeprom[0] == 0xa5u;
 }
 
@@ -156,9 +169,19 @@ static bool legacy_record_is_valid(const settings_record_t *record)
            legacy->crc32 == record_crc32(legacy);
 }
 
+static bool previous_record_is_valid(const settings_record_t *record)
+{
+    return record->magic == SETTINGS_MAGIC &&
+           record->format_version == SETTINGS_PREVIOUS_VERSION &&
+           record->payload_size == sizeof(settings_payload_t) &&
+           previous_payload_is_sane(&record->payload) &&
+           record->crc32 == record_crc32(record);
+}
+
 static bool stored_record_is_valid(const settings_record_t *record)
 {
-    return record_is_valid(record) || legacy_record_is_valid(record);
+    return record_is_valid(record) || previous_record_is_valid(record) ||
+           legacy_record_is_valid(record);
 }
 
 static bool sequence_is_newer(uint32_t left, uint32_t right)
@@ -184,6 +207,7 @@ static void capture_payload(settings_payload_t *payload)
     payload->sidetone_frequency_hz =
         winkey_emulator_get_sidetone_frequency();
     payload->output_mode = (uint8_t)storage_codec->output;
+    payload->midi_ptt_mode = (uint8_t)winkey_emulator_get_midi_ptt_mode();
     winkey_emulator_export_eeprom(payload->winkey_eeprom);
 }
 
@@ -196,6 +220,7 @@ static void convert_legacy_payload(
     payload->sidetone_volume_percent = legacy->sidetone_volume_percent;
     payload->sidetone_frequency_hz = legacy->sidetone_frequency_hz;
     payload->output_mode = WM8960_OUTPUT_BOTH;
+    payload->midi_ptt_mode = WINKEY_MIDI_PTT_PIHPSDR;
     memcpy(
         payload->winkey_eeprom,
         legacy->winkey_eeprom,
@@ -226,6 +251,9 @@ static bool apply_payload(const settings_payload_t *payload)
         return false;
     }
     audio_i2s_set_sidetone_volume(payload->sidetone_volume_percent);
+    winkey_emulator_set_midi_ptt_mode(
+        (winkey_midi_ptt_mode_t)payload->midi_ptt_mode
+    );
     winkey_emulator_set_sidetone_frequency(
         payload->sidetone_frequency_hz
     );
@@ -283,6 +311,9 @@ bool settings_storage_init(wm8960_t *codec)
         settings_payload_t restored;
         if (selected->format_version == SETTINGS_FORMAT_VERSION) {
             memcpy(&restored, &selected->payload, sizeof(restored));
+        } else if (selected->format_version == SETTINGS_PREVIOUS_VERSION) {
+            memcpy(&restored, &selected->payload, sizeof(restored));
+            restored.midi_ptt_mode = WINKEY_MIDI_PTT_PIHPSDR;
         } else {
             const settings_legacy_record_t *legacy =
                 (const settings_legacy_record_t *)selected;

@@ -35,7 +35,7 @@ static char event_ring[EVENT_RING_SIZE];
 static volatile uint32_t event_write;
 static volatile uint32_t event_read;
 static volatile uint32_t dropped_samples;
-static volatile bool decoder_enabled = true;
+static volatile bool decoder_enabled = false;
 static volatile uint16_t requested_frequency_hz = 750u;
 static volatile uint8_t estimated_wpm = 20u;
 static volatile uint8_t fixed_wpm;

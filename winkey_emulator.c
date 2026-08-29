@@ -33,7 +33,7 @@
 #define WINKEY_MIDI_CHANNEL        10u
 #define WINKEY_MIDI_KEY_NOTE       17u
 #define WINKEY_MIDI_PTT_NOTE       18u
-#define WINKEY_MIDI_SPEED_CC       3u
+#define WINKEY_MIDI_FREQUENCY_CC   3u
 
 #define WINKEY_BUFFER_LENGTH       128u
 #define WINKEY_BUFFER_MARGIN       85u
@@ -143,7 +143,8 @@ static uint8_t compensation = 0u;
 static uint8_t farnsworth = 10u;
 static uint8_t paddle_point = 50u;
 static uint8_t ratio = 50u;
-/* Enable the logical MIDI PTT by default; no physical PTT GPIO is required. */
+static winkey_midi_ptt_mode_t midi_ptt_mode = WINKEY_MIDI_PTT_OFF;
+/* Keep logical WinKey PTT enabled; MIDI note 18 has its own output mode. */
 static uint8_t pin_config = 0x0fu;
 
 #define SERIAL_ECHO_ENABLED    ((mode_register & 0x04u) != 0u)
@@ -175,7 +176,7 @@ static uint32_t now_ms;
 static uint32_t deadline_ms;
 static uint32_t last_key_up_ms;
 static uint32_t straight_pressed_ms;
-static uint32_t last_speed_report_ms;
+static uint32_t last_frequency_report_ms;
 
 static bool paddle_dit;
 static bool paddle_dah;
@@ -314,6 +315,18 @@ static void midi_send_control_change(uint8_t control, uint8_t value)
 #endif
 }
 
+static uint8_t midi_frequency_value(uint16_t frequency_hz)
+{
+    /* DL1YCF piHPSDR maps an absolute MIDI slider 0..127 to 300..1000 Hz. */
+    if (frequency_hz < 300u) {
+        frequency_hz = 300u;
+    } else if (frequency_hz > 1000u) {
+        frequency_hz = 1000u;
+    }
+    return (uint8_t)((((uint32_t)frequency_hz - 300u) * 127u + 350u) /
+                     700u);
+}
+
 static bool paddle_keying_state(void)
 {
     return keyer_state == KEYER_START_DIT ||
@@ -375,7 +388,9 @@ static void ptt_on(void)
         return;
     }
     ptt_output = true;
-    midi_send_note(WINKEY_MIDI_PTT_NOTE, true);
+    if (midi_ptt_mode != WINKEY_MIDI_PTT_OFF) {
+        midi_send_note(WINKEY_MIDI_PTT_NOTE, true);
+    }
 }
 
 static void ptt_off(void)
@@ -384,7 +399,12 @@ static void ptt_off(void)
         return;
     }
     ptt_output = false;
-    midi_send_note(WINKEY_MIDI_PTT_NOTE, false);
+    if (midi_ptt_mode == WINKEY_MIDI_PTT_PIHPSDR) {
+        midi_send_note(WINKEY_MIDI_PTT_NOTE, false);
+    } else if (midi_ptt_mode == WINKEY_MIDI_PTT_THETIS) {
+        /* Thetis MOX is a toggle: both PTT edges must be Note On. */
+        midi_send_note(WINKEY_MIDI_PTT_NOTE, true);
+    }
 }
 
 static void eeprom_write_defaults(void)
@@ -680,12 +700,16 @@ static void keyer_task(void)
         default: hang_length = 8u * dot_length; break;
     }
 
-    static uint8_t old_speed;
-    if (current_speed != old_speed ||
-        (uint32_t)(now_ms - last_speed_report_ms) >= 10000u) {
-        old_speed = current_speed;
-        last_speed_report_ms = now_ms;
-        midi_send_control_change(WINKEY_MIDI_SPEED_CC, current_speed);
+    static uint8_t old_midi_frequency = 0xffu;
+    uint8_t reported_frequency = midi_frequency_value(sidetone_frequency_hz);
+    if (reported_frequency != old_midi_frequency ||
+        (uint32_t)(now_ms - last_frequency_report_ms) >= 10000u) {
+        old_midi_frequency = reported_frequency;
+        last_frequency_report_ms = now_ms;
+        midi_send_control_change(
+            WINKEY_MIDI_FREQUENCY_CC,
+            reported_frequency
+        );
     }
 
     if ((effective_dit || effective_dah || manual_key) &&
@@ -1491,7 +1515,7 @@ void winkey_emulator_init(void)
     now_ms = to_ms_since_boot(get_absolute_time());
     deadline_ms = now_ms;
     last_key_up_ms = now_ms;
-    last_speed_report_ms = now_ms - 10000u;
+    last_frequency_report_ms = now_ms - 10000u;
 
     eeprom_write_defaults();
     settings_read_from_eeprom();
@@ -1503,7 +1527,6 @@ void winkey_emulator_init(void)
     sync_usb_audio_mute();
 
     midi_send_note(WINKEY_MIDI_KEY_NOTE, false);
-    midi_send_note(WINKEY_MIDI_PTT_NOTE, false);
 }
 
 void winkey_emulator_task(void)
@@ -1542,7 +1565,7 @@ void winkey_emulator_set_speed(uint8_t wpm)
         host_speed = wpm;
     }
     update_speed_pot();
-    last_speed_report_ms = now_ms - 10000u;
+    last_frequency_report_ms = now_ms - 10000u;
 }
 
 uint8_t winkey_emulator_get_speed(void)
@@ -1617,19 +1640,26 @@ bool winkey_emulator_get_paddle_swap(void)
     return PADDLE_SWAP;
 }
 
-void winkey_emulator_set_midi_ptt_enabled(bool enabled)
+void winkey_emulator_set_midi_ptt_mode(winkey_midi_ptt_mode_t mode)
 {
-    if (enabled) {
-        pin_config |= 0x01u;
-    } else {
-        pin_config &= (uint8_t)~0x01u;
-        ptt_off();
+    if (mode <= WINKEY_MIDI_PTT_THETIS) {
+        midi_ptt_mode = mode;
     }
 }
 
-bool winkey_emulator_get_midi_ptt_enabled(void)
+winkey_midi_ptt_mode_t winkey_emulator_get_midi_ptt_mode(void)
 {
-    return PTT_ENABLED;
+    return midi_ptt_mode;
+}
+
+const char *winkey_emulator_midi_ptt_mode_name(winkey_midi_ptt_mode_t mode)
+{
+    switch (mode) {
+        case WINKEY_MIDI_PTT_OFF: return "off";
+        case WINKEY_MIDI_PTT_PIHPSDR: return "onoff";
+        case WINKEY_MIDI_PTT_THETIS: return "toggle";
+        default: return "unknown";
+    }
 }
 
 void winkey_emulator_set_weight(uint8_t percent)

@@ -101,7 +101,9 @@ static void show_status(void)
     );
     tx_printf(
         "midi-ptt: %s\r\n",
-        winkey_emulator_get_midi_ptt_enabled() ? "on" : "off"
+        winkey_emulator_midi_ptt_mode_name(
+            winkey_emulator_get_midi_ptt_mode()
+        )
     );
     tx_printf("weight: %u%%\r\n", winkey_emulator_get_weight());
     tx_printf(
@@ -136,8 +138,8 @@ static void show_help(void)
         "  set output headphones|speakers|both\r\n"
         "  set mode iambic-a|iambic-b|ultimatic|bug\r\n"
         "  set paddle-swap on|off\r\n"
-        "  set midi-ptt on|off\r\n"
-        "  midi-ptt on|off\r\n"
+        "  set midi-ptt off|toggle|onoff\r\n"
+        "  midi-ptt off|toggle|onoff\r\n"
         "  set weight 0..100\r\n"
         "  set decoder on|off\r\n"
         "  set decoder-frequency 300..1200\r\n"
@@ -319,15 +321,22 @@ static void command_set(const char *setting, const char *argument)
         }
         tx_printf("OK paddle-swap=%s\r\n", argument);
     } else if (strcmp(setting, "midi-ptt") == 0) {
-        if (strcmp(argument, "on") == 0) {
-            winkey_emulator_set_midi_ptt_enabled(true);
+        if (strcmp(argument, "onoff") == 0) {
+            winkey_emulator_set_midi_ptt_mode(WINKEY_MIDI_PTT_PIHPSDR);
+        } else if (strcmp(argument, "toggle") == 0) {
+            winkey_emulator_set_midi_ptt_mode(WINKEY_MIDI_PTT_THETIS);
         } else if (strcmp(argument, "off") == 0) {
-            winkey_emulator_set_midi_ptt_enabled(false);
+            winkey_emulator_set_midi_ptt_mode(WINKEY_MIDI_PTT_OFF);
         } else {
-            tx_text("ERROR midi-ptt must be on or off\r\n");
+            tx_text("ERROR midi-ptt must be off, toggle or onoff\r\n");
             return;
         }
-        tx_printf("OK midi-ptt=%s\r\n", argument);
+        tx_printf(
+            "OK midi-ptt=%s\r\n",
+            winkey_emulator_midi_ptt_mode_name(
+                winkey_emulator_get_midi_ptt_mode()
+            )
+        );
     } else {
         tx_printf("ERROR unknown setting: %s\r\n", setting);
     }

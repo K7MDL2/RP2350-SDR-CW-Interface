@@ -11,7 +11,7 @@ The firmware combines the following functions in a single USB device:
 - a separate text console for status and settings;
 - a single-channel CW decoder for received radio audio, with decoded text
   displayed through the console serial port;
-- USB MIDI for CW, PTT, and speed information;
+- USB MIDI for CW, PTT, and sidetone-frequency information;
 - an Iambic/Ultimatic/bug keyer and a separate straight key;
 - a locally generated sidetone, adjustable from 300 to 1200 Hz (750 Hz by
   default);
@@ -234,11 +234,11 @@ TinyUSB and both CDC interfaces remain owned by core 0.
 
 ## CW decoder
 
-The decoder is enabled by default and listens to the RX/radio audio received
-from the computer, before output muting, master-volume processing, and sidetone
-mixing. It does not use the WM8960 microphone input. DSP runs on RP2350 core 1
-while decoded characters are transferred to core 0 and printed on the Console
-port, for example:
+The decoder is disabled by default. Enable it with `set decoder on`; it then
+listens to the RX/radio audio received from the computer, before output muting,
+master-volume processing, and sidetone mixing. It does not use the WM8960
+microphone input. DSP runs on RP2350 core 1 while decoded characters are
+transferred to core 0 and printed on the Console port, for example:
 
 ```text
 CW: CQ TEST 12345
@@ -411,7 +411,7 @@ present, the following defaults are used:
 | Sidetone volume | 25% |
 | Sidetone frequency | 750 Hz |
 | Keyer speed | 21 WPM |
-| Virtual MIDI PTT | Enabled |
+| Virtual MIDI PTT | Off |
 
 A WinKey application can change frequency and speed during a session. The most
 recent WinKey setting takes priority until the encoder is rotated again. To
@@ -460,22 +460,29 @@ need to be changed.
 ## MIDI
 
 For a short setup and test procedure, including RX2/VAC2 monitoring, see
-[Using the CW keyer with Thetis](THETIS-CW-SETUP.md).
+[Using the CW keyer with Thetis](THETIS-CW-SETUP.md). Import
+`thetis-keyer.m2c` for the note 17 CW-key mapping.
 
 The firmware sends the following events on MIDI channel 10:
 
 | Event | MIDI message |
 |---|---|
 | CW key-down/up | Note 17 |
-| PTT on/off | Note 18 |
-| Speed | Control Change 3 |
+| PTT (piHPSDR mode) | Note 18 On/Off |
+| Toggle PTT mode | Note 18 On at both PTT edges |
+| Sidetone frequency | Control Change 3 (300..1000 Hz mapped to 0..127) |
 
-The virtual MIDI PTT is enabled in the factory defaults. It sends note 18 over
-USB and does not require a physical PTT GPIO connection. A previously saved
-WinKey pin configuration remains authoritative after a firmware update.
-On the text console, use `midi-ptt on` to enable it for the current session,
-then use `save` (or double-click the encoder) to retain the setting. Use
-`show` to check the current `midi-ptt` state.
+The virtual MIDI PTT factory default is `off`, which is the safe setting for
+Thetis: let Thetis Semi Break-In control transmit/receive, even when note 18 is
+not mapped. For piHPSDR, enter `midi-ptt onoff` and save it; PTT down then sends
+Note On and PTT up sends Note Off. The `toggle` mode remains available for other
+host software but must not be used with Thetis. Run `save` (or double-click the
+encoder) to retain the mode and `show` to inspect it.
+DL1YCF piHPSDR can map CC3 as event **Controller**, type **Slider**, action
+**CW Frequency** (`CWFREQ`). Its 0..127 slider range corresponds to 300..1000
+Hz. Frequencies above 1000 Hz are reported as 1000 Hz because that is the
+piHPSDR action limit. Stock Thetis has no MIDI action for CW Pitch, so its CW
+Pitch must be set manually to the same value as the keyer.
 
 For a manual key-down test, send the following MIDI message:
 
