@@ -22,9 +22,11 @@ extern "C" {
 #define WM8960_I2C_ADDRESS_7BIT 0x1Au
 
 typedef enum {
+    WM8960_OUTPUT_OFF        = 0,
     WM8960_OUTPUT_HEADPHONES = 1,
     WM8960_OUTPUT_SPEAKERS   = 2,
     WM8960_OUTPUT_BOTH       = 3
+    
 } wm8960_output_t;
 
 typedef enum {

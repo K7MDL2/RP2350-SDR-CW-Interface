@@ -1,8 +1,10 @@
 #include <stdio.h>
 
 #include "pico/stdlib.h"
+#include "hardware/uart.h"
 #include "hardware/clocks.h"
 #include "hardware/pll.h"
+#include "hardware/gpio.h"
 #include "tusb.h"
 #include <string.h>
 
@@ -16,8 +18,16 @@
 #include "usb_audio_callbacks.h"
 #include "winkey_emulator.h"
 
+#ifdef LCD
+    #include "common.h"
+    #include "lcd.h"
+    #include "lcd_extra.h"
+#endif
+
 #define MIDI_CW_KEY_NOTE 17u
 #define MIDI_PTT_NOTE    18u
+wm8960_t codec;
+board_type_t board_type = (board_type_t)4; // WAVESHARE_RP2350_PIZERO_WM8960_LCD_096
 
 static void midi_task(void)
 {
@@ -89,27 +99,78 @@ static void midi_task(void)
 #endif
 }
 
-int main(void)
-{
-    /*
-     * Set sysclock to 153.6 MHz: VCO=768 MHz / postdiv=5.
-     *
-     * 153600000 / (48000 * 64) = 50 exactly.
-     * PIO divider 50 is a pure integer -> no fractional jitter ->
-     * no beat-frequency click between RP2350 BCLK and WM8960 MCLK/PLL.
-     *
-     * USB uses its own fixed 48 MHz PLL, unaffected by this change.
-     */
-    set_sys_clock_pll(768 * MHZ, 5, 1);
+#ifdef LCD
+void lcd_initialize(){
+    #if defined(RASPBERRYPI_PICO2)
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_IN);
+        board_type = gpio_get(PICO_DEFAULT_LED_PIN) ? WAVESHARE_RP2350_LCD_096 : RASPBERRY_PI_PICO_2;
+        gpio_set_dir((uint)PICO_DEFAULT_LED_PIN, (bool)GPIO_OUT);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+    #elif defined(WAVESHARE_RP2350_PIZERO)
+        #define PICO_DEFAULT_LED_PIN 6 // GPIO6 (connected to driver of backlight via WM8960+0.96 LCD HAT)
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_IN);
+        board_type = WAVESHARE_RP2350_PIZERO_WM8960_LCD_096;
+        gpio_set_dir((uint)PICO_DEFAULT_LED_PIN, (bool)GPIO_OUT);
+        gpio_put(PICO_DEFAULT_LED_PIN, 1);
+    #else
+        gpio_init(PICO_DEFAULT_LED_PIN);
+        gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_IN);
+        board_type = gpio_get(PICO_DEFAULT_LED_PIN) ? WAVESHARE_RP2040_LCD_096 : RASPBERRY_PI_PICO;
+        gpio_set_dir((uint)PICO_DEFAULT_LED_PIN, (bool)GPIO_OUT);
+        gpio_put(PICO_DEFAULT_LED_PIN, 0);
+    #endif
 
-    /*
-     * TinyUSB initialiseert het samengestelde Audio + CDC + MIDI-apparaat.
-     * pico_stdio_usb staat uit omdat dat eigen USB-descriptors gebruikt.
-     */
-    stdio_init_all();
-    tusb_init();
-    sleep_ms(100);
+    pico_st7735_80x160_config_t lcd_cfg[] = {
+        // LCD_CFG_CASE: 4
+        SPI_CLK_FREQ_DEFAULT,
+        spi1,
+        PIN_LCD_SPI1_CS_WAVESHARE_A,
+        PIN_LCD_SPI1_SCK_WAVESHARE_A,
+        PIN_LCD_SPI1_MOSI_WAVESHARE_A,
+        PIN_LCD_DC_WAVESHARE_A,
+        PIN_LCD_RST_WAVESHARE_A,
+        PIN_LCD_BLK_WAVESHARE_A,
+        PWM_BLK_DEFAULT,
+        INVERSION_DEFAULT,  // 0: non-color-inversion, 1: color-inversion
+        RGB_ORDER_DEFAULT,  // 0: RGB, 1: BGR
+        ROTATION_DEFAULT,
+        H_OFS_DEFAULT,
+        V_OFS_DEFAULT,
+        X_MIRROR_DEFAULT
+    };
 
+    LCD_Config(lcd_cfg);
+    LCD_Init();
+    u8 bl_val = OLED_BLK_Get_PWM();
+    u8 rotation = 2;
+    const uint32_t TimeStay = 1000;
+
+    LCD_SetRotation(rotation);
+    LCD_Clear(BLACK);
+    BACK_COLOR=BLACK;
+    // Draw a trest line
+    for (int16_t y=0; y < LCD_H(); y+=6) {
+        LCD_DrawLine(0, 0, LCD_W()-1, y, RED);
+        sleep_ms(0);
+    }
+    int16_t x=0;
+    //LCD_DrawRectangle(LCD_W()/2 -x/2, LCD_H()/2 -x*LCD_H()/2/LCD_W(), LCD_W()/2 -x/2 + x, LCD_H()/2 -x*LCD_H()/2/LCD_W() + x*LCD_H()/LCD_W(), WHITE);
+    LCD_ShowStringLn(12, 0*16, 0*8, 19*8, (const u8 *)"MIDI USB CW Keyer", 1, WHITE);
+    //sleep_ms(TimeStay);
+    LCD_update_all_LEDs(0);
+}
+#endif
+
+/*
+* WM8960 I2C-control:
+*
+* GPIO2 = SDA
+* GPIO3 = SCL
+* I2C1  = 400 kHz
+*/
+void WM8960_initialize() {  
     printf("\r\n");
     printf("============================\r\n");
     printf("WM8960 hardware test\r\n");
@@ -118,15 +179,6 @@ int main(void)
         (unsigned long)clock_get_hz(clk_sys)
     );
 
-    wm8960_t codec;
-
-    /*
-     * WM8960 I2C-control:
-     *
-     * GPIO2 = SDA
-     * GPIO3 = SCL
-     * I2C1  = 400 kHz
-     */
     printf("Starting I2C1 on GPIO2/GPIO3...\r\n");
 
     wm8960_bus_init(
@@ -159,14 +211,16 @@ int main(void)
     }
 
     printf("WM8960 initialized\r\n");
+}
 
-    /*
-     * PIO en DMA starten.
-     *
-     * GPIO18 = BCLK
-     * GPIO19 = LRCLK
-    * GPIO21 = DAC-data
-     */
+/*
+* PIO en DMA starten.
+*
+* GPIO18 = BCLK
+* GPIO19 = LRCLK
+* GPIO21 = DAC-data
+*/
+void i2s_initialize() {
     printf("Starting PIO I2S...\r\n");
 
     if (!audio_i2s_start()) {
@@ -185,13 +239,16 @@ int main(void)
      * Tijdelijke diagnose. Mag later verwijderd worden.
      */
    // audio_i2s_debug();
+}
 
-    /*
-     * Hoofdtelefoon- en luidsprekervolume instellen.
-     *
-     * Begin voor de test met 100%.
-     * Later kan dit bijvoorbeeld 70 of 80 worden.
-     */
+/*
+* Hoofdtelefoon- en luidsprekervolume instellen.
+*
+* Begin voor de test met 100%.
+* Later kan dit bijvoorbeeld 70 of 80 worden.
+*/
+void audio_startup() {
+
     if (!wm8960_set_headphone_volume(&codec, 80)) {
         printf("ERROR: headphone volume failed\r\n");
 
@@ -213,8 +270,8 @@ int main(void)
     printf("Headphone and speaker volume set to 80%%\r\n");
 
     /*
-     * De DAC pas unmuten nadat PIO en DMA lopen.
-     */
+    * De DAC pas unmuten nadat PIO en DMA lopen.
+    */
     if (!wm8960_start_playback(&codec)) {
         printf("ERROR: WM8960 unmute failed\r\n");
 
@@ -226,10 +283,52 @@ int main(void)
 
     printf("WM8960 playback started\r\n");
     printf("USB speaker audio routed to WM8960\r\n");
-#if CFG_TUD_MIDI > 0
-    printf("750 Hz sidetone: MIDI note 17 key-down/key-up\r\n");
-#endif
+    #if CFG_TUD_MIDI > 0
+        printf("750 Hz sidetone: MIDI note 17 key-down/key-up\r\n");
+    #endif
+}
 
+int main(void)
+{
+    /*
+     * Set sysclock to 153.6 MHz: VCO=768 MHz / postdiv=5.
+     *
+     * 153600000 / (48000 * 64) = 50 exactly.
+     * PIO divider 50 is a pure integer -> no fractional jitter ->
+     * no beat-frequency click between RP2350 BCLK and WM8960 MCLK/PLL.
+     *
+     * USB uses its own fixed 48 MHz PLL, unaffected by this change.
+     */
+    set_sys_clock_pll(768 * MHZ, 5, 1);
+
+    /*
+     * TinyUSB initialiseert het samengestelde Audio + CDC + MIDI-apparaat.
+     * pico_stdio_usb staat uit omdat dat eigen USB-descriptors gebruikt.
+     */
+    stdio_init_all();
+    tusb_init();
+    
+    // Wait until USB is connected (optional but useful for debugging)
+    //while (!stdio_usb_connected()) {
+    //    sleep_ms(100);
+    //}
+
+    // Wait before stable power-on for 750ms
+    // to avoid unintended power-on when Headphone plug in
+    for (int i = 0; i < 30; i++) {
+        sleep_ms(25);
+    }
+
+    #ifdef LCD
+    lcd_initialize();
+    #endif
+
+    WM8960_initialize();
+    
+    i2s_initialize();
+    
+    audio_startup();
+    
     winkey_emulator_init();
     printf("WinKey 2.3 emulator active on CDC\r\n");
     printf("Paddle DIT: GPIO23 to GND, internal pull-up enabled\r\n");

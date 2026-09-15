@@ -12,36 +12,29 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
+
 cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Ondersteuning voor de Raspberry Pi Pico VS Code Extension
-if(WIN32)
-    set(USERHOME $ENV{USERPROFILE})
-else()
-    set(USERHOME $ENV{HOME})
-endif()
-
-set(sdkVersion 2.3.0)
-set(toolchainVersion 15_2_Rel1)
-set(picotoolVersion 2.3.0)
-
-set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
-
-if(EXISTS ${picoVscode})
-    include(${picoVscode})
-endif()
-
 # RP2350
-set(PICO_BOARD pico2 CACHE STRING "Board type")
+set(PICO_BOARD waveshare_rp2350_pizero CACHE STRING "Board type")
+
+set(PICO_SDK_PATH C:/Users/k7mdl/.pico-sdk/sdk/2.3.0)
+#include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+
+set(PICO_EXTRAS_PATH D:/Documents/GitHub/pico-extras)
+#include($ENV{PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
+include(${PICO_EXTRAS_PATH}/external/pico_extras_import.cmake)
 
 # Pico SDK importeren
-include(pico_sdk_import.cmake)
+#include(pico_sdk_import.cmake)
 
 project(rp2350-sdr-cw-interface C CXX ASM)
+
 
 option(RP2350_USB_CDC_ONLY "Build a temporary CDC-only USB test device" OFF)
 option(RP2350_USB_CDC_MIDI_TEST "Build a temporary CDC + MIDI USB test device" OFF)
@@ -53,9 +46,20 @@ option(RP2350_USB_AUDIO_DUPLEX_ONLY "Build RX speaker + TX microphone without CD
 option(RP2350_USB_AUDIO_DUPLEX_CDC "Build RX speaker + TX microphone + CDC" OFF)
 option(RP2350_USB_AUDIO_DUPLEX_CDC_MIDI "Build RX speaker + TX microphone + CDC + MIDI" ON)
 option(RP2350_PATCH_TINYUSB_RP2_ISO "Apply TinyUSB RP2 ISO reactivation fix #2937" ON)
+option(RP2350_LCD "Build LCD Feature" ON)
 
 # Pico SDK initialiseren
 pico_sdk_init()
+
+#add_subdirectory(lib/file_menu)
+#add_subdirectory(lib/LcdElementBox)
+#add_subdirectory(lib/pico_audio_i2s_32b)
+#add_subdirectory(lib/pico_audio_i2s_32b/src/pico_audio_32b)
+#add_subdirectory(lib/pico_fatfs)
+#add_subdirectory(lib/pico_flash_param)
+add_subdirectory(lib/pico_st7735_80x160)
+#add_subdirectory(lib/picojpeg)
+#add_subdirectory(lib/PlayAudio)
 
 # Pico SDK 2.3.0 contains the pre-#2937 RP2040/RP2350 DCD implementation.
 # Windows UAC2 changes alt 1 -> alt 0 -> alt 1 while selecting the format.
@@ -246,19 +250,19 @@ target_link_libraries(
 
     pico_flash
     pico_multicore
-
     tinyusb_device
     tinyusb_board
+
+    # for LCD
+    pico_st7735_80x160
 
     m
 )
 
+
 # USB wordt door TinyUSB met onze eigen composite descriptors beheerd.
 # pico_stdio_usb zou daarnaast een tweede USB-configuratie proberen te maken.
-pico_enable_stdio_usb(
-    rp2350-sdr-cw-interface
-    0
-)
+pico_enable_stdio_usb(rp2350-sdr-cw-interface 0)
 
 if(RP2350_USB_CDC_ONLY)
     target_compile_definitions(rp2350-sdr-cw-interface PRIVATE RP2350_USB_CDC_ONLY=1)
@@ -278,13 +282,12 @@ elseif(RP2350_USB_AUDIO_OUT_ONLY)
     target_compile_definitions(rp2350-sdr-cw-interface PRIVATE RP2350_USB_AUDIO_OUT_ONLY=1)
 elseif(RP2350_USB_SPK_CDC_TEST)
     target_compile_definitions(rp2350-sdr-cw-interface PRIVATE RP2350_USB_SPK_CDC_TEST=1)
+elseif(RP2350_LCD)
+    target_compile_definitions(rp2350-sdr-cw-interface PRIVATE RP2350_LCD=1)
 endif()
 
 # Geen UART-debugging via GPIO0/GPIO1
-pico_enable_stdio_uart(
-    rp2350-sdr-cw-interface
-    0
-)
+pico_enable_stdio_uart(rp2350-sdr-cw-interface 0)
 
 # Eventueel kort wachten op het openen van de Serial Monitor
 target_compile_definitions(

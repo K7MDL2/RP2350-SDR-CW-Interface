@@ -2,12 +2,18 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "audio_i2s_test.h"
 #include "board_pins.h"
+#include "pico/stdio.h"
 #include "pico/stdlib.h"
 #include "settings_storage.h"
 #include "winkey_emulator.h"
+#include "lcd_extra.h"
+#include "lcd.h"
 
 #define ENCODER_A_PIN BOARD_ENCODER_A_PIN
 #define ENCODER_B_PIN BOARD_ENCODER_B_PIN
@@ -36,12 +42,14 @@ typedef enum
     CONTROL_NONE
 } control_selection_t;
 
+//#ifdef LED
 static const uint8_t function_led_pins[] = {
     LED_MASTER_PIN,
     LED_SIDETONE_PIN,
     LED_FREQUENCY_PIN,
     LED_SPEED_PIN,
     LED_OUTPUT_PIN};
+//#endif
 
 static const uint8_t all_led_pins[] = {
     LED_MASTER_PIN,
@@ -51,6 +59,43 @@ static const uint8_t all_led_pins[] = {
     LED_OUTPUT_PIN,
     LED_OUTPUT_HP_PIN,
     LED_OUTPUT_SPK_PIN};
+
+// Using row and column is useful to allow easier scaling to different resolution screens.  
+struct led_location_t {
+    uint16_t x; // x position of left edge of LED icon
+    uint16_t row;   // row (used with height (row * height)
+    uint16_t row_height; // set based on font and visual style goals.
+    uint16_t w; // LED icon width
+    uint16_t h; // LED icon height
+    uint16_t r; // radius if rounded rectangle or circle used.
+    uint16_t s; // LED icon padding v and h
+    uint16_t on_color;  // when control is active use this color
+    uint16_t off_color;  // when control is inactive, use this color
+    char LED_label;  // can be used to draw a single char label inside the functon LED icon.
+    char label[160];  // 1 fullwidth buffer for 1 line of text.  Normall shorter for active function label confirmation
+};
+
+// for 80x160px display
+const uint16_t RW = 3;  // row
+const uint16_t RH = 16; // row height
+const uint16_t w  = 14; // icon width
+const uint16_t h  = 18; // icon height
+const uint16_t r  = 3;  // radius of a rounded rectangle or circle
+const uint16_t s  = 8;  // icon spacing. (CW-w) will have some sdpacing already so this is additional padding h and v
+
+#define NUM_LEDS 7
+
+struct led_location_t led_pin_location[NUM_LEDS] = {
+    {10, RW, RH, w, h, r, s, GREEN, LGRAY, 'M', "Master Volume"}, //LED_MASTER_PIN,
+    {10, RW, RH, w, h, r, s, GREEN, LGRAY, 'L', "Sidetone Level"}, //LED_SIDETONE_PIN
+    {10, RW, RH, w, h, r, s, GREEN, LGRAY, 'F', "Sidetone Frequency"}, //LED_FREQUENCY_PIN
+    {10, RW, RH, w, h, r, s, GREEN, LGRAY, 'S', "Speed"}, //LED_SPEED_PIN
+    {10, RW, RH, w, h, r, s, GREEN, LGRAY, 'O', "Output Select (HP/Spkr/Both)"}, //LED_OUTPUT_PIN
+    {10, RW, RH, w, h, r, s, BLUE, LGRAY, 'H', "HP"}, //LED_OUTPUT_HP_PIN
+    {10, RW, RH, w, h, r, s, BLUE, LGRAY, 'S', "SPKR"}  //LED_OUTPUT_SPK_PIN
+};
+
+// 1st col  -  (26+0+((18-14))/2) = 28 left edge for 14px wide LED color square 
 
 /* Full-step quadrature decoder; four valid transitions produce one detent. */
 static const int8_t encoder_transition[16] = {
@@ -75,6 +120,83 @@ static uint8_t feedback_transitions_remaining;
 static uint32_t feedback_deadline_ms;
 static uint32_t feedback_interval_ms;
 
+/******************************************************************************
+    Function description: Draw or update a "LED" images on screen based on ID
+******************************************************************************/
+
+void LCD_Draw_LED(uint16_t x,uint16_t y, uint16_t w, uint16_t h, uint16_t color)
+{
+    LCD_Fill(x-w/2,y-h/2,x+w/2,y+h/2,color);
+}
+
+// Update a single LED text icon
+void LCD_update_n_LED(uint8_t led_id, bool state) {
+    static uint8_t last_states;
+    static uint8_t valid_states;
+    uint8_t state_mask = (uint8_t)(1u << led_id);
+
+    if ((valid_states & state_mask) != 0u &&
+        (((last_states & state_mask) != 0u) == state)) {
+        return;
+    }
+    if (state) {
+        last_states |= state_mask;
+    } else {
+        last_states &= (uint8_t)~state_mask;
+    }
+    valid_states |= state_mask;
+
+    uint16_t w = led_pin_location[led_id].w;
+    uint16_t h = led_pin_location[led_id].h;
+    uint16_t s = led_pin_location[led_id].s;
+    uint16_t x = led_pin_location[led_id].x;
+    uint16_t row = led_pin_location[led_id].row;
+    uint16_t rh = led_pin_location[led_id].row_height;
+    //uint16_t r = led_pin_location[led_id].radius;
+    uint16_t color;
+
+    // compute the icon location with each grid column and row.  Use to pad more spacing up and down.
+    uint16_t x1 = x + led_id*w + led_id*s;    // calc space between the icon and col. take 1/2 and add to the left side for x
+    // 1st col  -  5+0*10 + 0*8 = 5  // must be > w/2
+    // 2nd col  -  5+1*10 + 1*8 = 23
+    // 3rd col  -  5+2*10 + 2*8 = 41
+    // 4th col  -  5+3*10 + 3*8 = 59 
+    // 5th col  -  5+4*10 + 4*8 = 77
+    // 6th col  -  5+5*10 + 5*8 = 95
+    // 7th col  -  5+6*10 + 6*8 = 113
+    uint16_t y = row*rh + h + s;   // col width x col height, add spacing
+
+    static uint8_t last_led_id = 0;
+    char temp_str[160] = "";
+
+    if (state) {
+        color = led_pin_location[led_id].on_color;
+        
+        // ToDo: Draw active function label above LED icons.  erase before and after timeout.   Append real time value from encoder for this function
+        strcpy(temp_str, led_pin_location[last_led_id].label);    // erase old string
+        //LCD_ShowString(8, 3*16, (uint8_t *) temp_str, BLACK);
+        //LCD_ShowStringLn(x, 0*rh, 0*8, 17*8, (const u8 *)temp_str, 1, BLACK);
+        
+        strcpy(temp_str, led_pin_location[led_id].label);
+        //LCD_ShowString(8, 3*16, (uint8_t *) temp_str, CYAN);
+        //LCD_ShowStringLn(x, 0*rh, 0*8, 17*8, (const u8 *)temp_str, 1, CYAN);
+        last_led_id = led_id;
+    }
+    else {
+        color = led_pin_location[led_id].off_color;
+    }
+    
+    LCD_Draw_LED(x1, y, w, h, color);  // w/2 = radius of circle or half width.  Draw takes radio so will do w*2
+    LCD_ShowChar(x1-4, (4*rh), led_pin_location[led_id].LED_label, 1, BLACK);  // overlay icon with char label
+}
+
+void LCD_update_all_LEDs(bool state) {
+    for (int i=0; i< NUM_LEDS; i++)
+    {
+        LCD_update_n_LED(i, state);
+    }
+}
+
 static int clamp_int(int value, int minimum, int maximum)
 {
     if (value < minimum)
@@ -92,14 +214,19 @@ static void set_all_leds(bool on)
 {
     for (size_t index = 0u;
          index < sizeof(all_led_pins) / sizeof(all_led_pins[0]);
-         ++index)
-    {
+         ++index) {
+        #ifdef LEDS
         gpio_put(all_led_pins[index], on);
+        #endif
+        #ifdef LCD
+        LCD_update_n_LED(index, on);
+        #endif
     }
 }
 
 static void update_selection_leds(void)
 {
+    
     if (feedback_active || awaiting_save_result)
     {
         return;
@@ -108,17 +235,29 @@ static void update_selection_leds(void)
          index < sizeof(function_led_pins) / sizeof(function_led_pins[0]);
          ++index)
     {
+        #ifdef LEDS
         gpio_put(
             function_led_pins[index],
-            selection == (control_selection_t)index);
+            selection == (control_selection_t)index);   
+        gpio_put(
+            LED_OUTPUT_HP_PIN,
+            (front_panel_codec->output & WM8960_OUTPUT_HEADPHONES) != 0);
+        gpio_put(
+            LED_OUTPUT_SPK_PIN,
+            (front_panel_codec->output & WM8960_OUTPUT_SPEAKERS) != 0);
+        #endif
+        
+        #ifdef LCD        
+        // update the function icons and text
+        LCD_update_n_LED(index, selection == (control_selection_t)index);  // selection is 0 or 1 based on match or not
+        #endif
     }
 
-    gpio_put(
-        LED_OUTPUT_HP_PIN,
-        (front_panel_codec->output & WM8960_OUTPUT_HEADPHONES) != 0);
-    gpio_put(
-        LED_OUTPUT_SPK_PIN,
-        (front_panel_codec->output & WM8960_OUTPUT_SPEAKERS) != 0);
+            #ifdef LCD
+            // Update output indicators once, after the function indicators.
+            LCD_update_n_LED(NUM_LEDS-2, (front_panel_codec->output & WM8960_OUTPUT_HEADPHONES) != 0);
+            LCD_update_n_LED(NUM_LEDS-1, (front_panel_codec->output & WM8960_OUTPUT_SPEAKERS) != 0);
+            #endif
 }
 
 static void start_led_feedback(
@@ -307,6 +446,7 @@ bool front_panel_controls_init(wm8960_t *codec)
     gpio_set_dir(ENCODER_BUTTON_PIN, GPIO_IN);
     gpio_pull_up(ENCODER_BUTTON_PIN);
 
+    #ifdef LEDS
     for (size_t index = 0u;
          index < sizeof(all_led_pins) / sizeof(all_led_pins[0]);
          ++index)
@@ -315,7 +455,13 @@ bool front_panel_controls_init(wm8960_t *codec)
         gpio_set_dir(all_led_pins[index], GPIO_OUT);
         gpio_put(all_led_pins[index], false);
     }
-
+    #endif
+    #ifdef LCD
+    set_all_leds(1);
+    sleep_ms(700);
+    set_all_leds(0);
+    #endif
+    
     encoder_history = (uint8_t)((gpio_get(ENCODER_A_PIN) ? 2u : 0u) |
                                 (gpio_get(ENCODER_B_PIN) ? 1u : 0u));
     encoder_accumulator = 0;
