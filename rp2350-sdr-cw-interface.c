@@ -14,6 +14,7 @@
 #include "front_panel_controls.h"
 #include "control_console.h"
 #include "cw_decoder.h"
+#include "cw_text_display.h"
 #include "settings_storage.h"
 #include "usb_audio_callbacks.h"
 #include "winkey_emulator.h"
@@ -150,16 +151,16 @@ void lcd_initialize(){
     LCD_SetRotation(rotation);
     LCD_Clear(BLACK);
     BACK_COLOR=BLACK;
-    // Draw a trest line
-    for (int16_t y=0; y < LCD_H(); y+=6) {
-        LCD_DrawLine(0, 0, LCD_W()-1, y, RED);
-        sleep_ms(0);
-    }
-    int16_t x=0;
-    //LCD_DrawRectangle(LCD_W()/2 -x/2, LCD_H()/2 -x*LCD_H()/2/LCD_W(), LCD_W()/2 -x/2 + x, LCD_H()/2 -x*LCD_H()/2/LCD_W() + x*LCD_H()/LCD_W(), WHITE);
-    LCD_ShowStringLn(12, 0*16, 0*8, 19*8, (const u8 *)"MIDI USB CW Keyer", 1, WHITE);
+
+    /* Separates the active screen from the surrounding hardware bezel. */
+    #define SCREEN_BORDER_THICKNESS 1u
+    LCD_Fill(0, 0, LCD_W() - 1, SCREEN_BORDER_THICKNESS - 1, RED);
+    LCD_Fill(0, LCD_H() - SCREEN_BORDER_THICKNESS, LCD_W() - 1, LCD_H() - 1, RED);
+    LCD_Fill(0, 0, SCREEN_BORDER_THICKNESS - 1, LCD_H() - 1, RED);
+    LCD_Fill(LCD_W() - SCREEN_BORDER_THICKNESS, 0, LCD_W() - 1, LCD_H() - 1, RED);
+
     //sleep_ms(TimeStay);
-    LCD_update_all_LEDs(0);
+    cw_text_display_init();
 }
 #endif
 

@@ -21,6 +21,7 @@
 
 #include "audio_i2s_test.h"
 #include "board_pins.h"
+#include "cw_text_display.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
 
@@ -335,6 +336,11 @@ static bool paddle_keying_state(void)
            keyer_state == KEYER_SEND_DAH ||
            keyer_state == KEYER_START_STRAIGHT ||
            keyer_state == KEYER_SEND_STRAIGHT;
+}
+
+bool winkey_emulator_is_paddle_keying(void)
+{
+    return key_output && paddle_keying_state();
 }
 
 static void sync_sidetone_output(void)
@@ -799,6 +805,7 @@ static void keyer_task(void)
                     if (!ptt_output && PTT_ENABLED) {
                         ptt_on();
                     }
+                    cw_text_display_put_char(' ', true);
                     keyer_state = KEYER_SEND_CHAR_DELAY;
                 } else {
                     deadline_ms = now_ms;
@@ -806,6 +813,7 @@ static void keyer_task(void)
                         ptt_on();
                         deadline_ms = now_ms + 10u * ptt_lead_in;
                     }
+                    cw_text_display_put_char((char)morse_to_ascii(sending), true);
                     keyer_state = KEYER_SEND_CHAR_PTT;
                 }
                 break;
@@ -843,6 +851,7 @@ static void keyer_task(void)
                     case ' ':
                         sending = 1u;
                         deadline_ms = now_ms + word_pause;
+                        cw_text_display_put_char(' ', true);
                         keyer_state = KEYER_SEND_CHAR_DELAY;
                         break;
                     case '[':
@@ -870,6 +879,11 @@ static void keyer_task(void)
                                 ptt_on();
                                 deadline_ms = now_ms + 10u * ptt_lead_in;
                             }
+                            cw_text_display_put_char(
+                                (char)(value >= 'a' && value <= 'z'
+                                    ? value - ('a' - 'A')
+                                    : value),
+                                true);
                             keyer_state = KEYER_SEND_CHAR_PTT;
                         }
                         break;

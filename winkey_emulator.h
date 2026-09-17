@@ -39,6 +39,7 @@ winkey_midi_ptt_mode_t winkey_emulator_get_midi_ptt_mode(void);
 const char *winkey_emulator_midi_ptt_mode_name(winkey_midi_ptt_mode_t mode);
 void winkey_emulator_set_weight(uint8_t percent);
 uint8_t winkey_emulator_get_weight(void);
+bool winkey_emulator_is_paddle_keying(void);
 void winkey_emulator_export_eeprom(
     uint8_t output[WINKEY_PERSISTENT_EEPROM_SIZE]
 );

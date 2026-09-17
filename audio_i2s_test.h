@@ -15,6 +15,7 @@ void audio_i2s_task(void);
 size_t audio_i2s_write_mono16(const int16_t *samples, size_t frame_count);
 size_t audio_i2s_read_mono16(int16_t *samples, size_t frame_count);
 uint32_t audio_i2s_playback_queued_frames(void);
+uint32_t audio_i2s_get_host_underrun_count(void);
 
 #define AUDIO_SIDETONE_SOURCE_LEGACY (1u << 0)
 #define AUDIO_SIDETONE_SOURCE_MIDI   (1u << 1)

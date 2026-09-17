@@ -177,6 +177,8 @@ add_executable(rp2350-sdr-cw-interface
     front_panel_controls.c
     control_console.c
     cw_decoder.c
+    cw_text_display.c
+    cw_display_source.c
     settings_storage.c
     usb_os_guessing.c
     usb_descriptors.c
@@ -188,6 +190,8 @@ set_source_files_properties(
     front_panel_controls.c
     control_console.c
     cw_decoder.c
+    cw_text_display.c
+    cw_display_source.c
     settings_storage.c
     usb_os_guessing.c
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra"

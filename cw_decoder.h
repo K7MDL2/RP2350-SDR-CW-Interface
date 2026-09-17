@@ -18,6 +18,9 @@ void cw_decoder_submit_audio(const int16_t *samples, size_t frame_count);
 void cw_decoder_task(void);
 void cw_decoder_set_enabled(bool enabled);
 bool cw_decoder_get_enabled(void);
+/* Both return dBFS (0 = full scale, negative = quieter), pre-gain referenced. */
+float cw_decoder_get_signal_level(void);
+float cw_decoder_get_threshold(void);
 bool cw_decoder_set_frequency(uint16_t frequency_hz);
 uint16_t cw_decoder_get_frequency(void);
 uint8_t cw_decoder_get_wpm(void);

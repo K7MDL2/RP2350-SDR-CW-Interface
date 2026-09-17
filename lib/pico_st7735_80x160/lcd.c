@@ -531,6 +531,23 @@ void LCD_Fill(u16 xsta,u16 ysta,u16 xend,u16 yend,u16 color)
     }
 }
 
+/******************************************************************************
+    Function description: blit a pre-rendered buffer in a single SPI burst
+      Entry data: x,y top-left corner, w,h size in pixels
+                buffer w*h big-endian RGB565 pixels (w*h*2 bytes)
+      Return value: None
+      Much faster than one LCD_WR_DATA()/LCD_DrawPoint() call per pixel,
+      each of which toggles chip-select separately.
+******************************************************************************/
+void LCD_BlitBuffer(u16 x, u16 y, u16 w, u16 h, const u8 *buffer)
+{
+    LCD_Address_Set(x, y, (u16)(x + w - 1u), (u16)(y + h - 1u));
+    OLED_DC_Set();
+    OLED_CS_Clr();
+    spi_write_blocking(_config.spi_inst, buffer, (size_t)w * h * 2u);
+    OLED_CS_Set();
+}
+
 
 /******************************************************************************
     Function description: line drawing

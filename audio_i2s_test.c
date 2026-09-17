@@ -1,6 +1,8 @@
 #include "audio_i2s_test.h"
 #include "cw_decoder.h"
+#include "cw_display_source.h"
 #include "board_pins.h"
+#include "winkey_emulator.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -683,8 +685,42 @@ void audio_i2s_task(void)
         int16_t host_sample = host_audio_next_stream_sample();
         host_sample = host_audio_apply_gain(host_sample);
 
-        int16_t mixed =
-            saturating_add_int16(host_sample, sidetone_next_sample());
+        int16_t sidetone_sample = sidetone_next_sample();
+        int16_t mixed = saturating_add_int16(host_sample, sidetone_sample);
+
+        /*
+         * Decoder input follows the on-screen source selection: WinKey text
+         * never loops back into it (it displays directly), and RX/paddle can
+         * be isolated from each other instead of always mixed together.
+         */
+        bool paddle_active = winkey_emulator_is_paddle_keying();
+        cw_display_source_t decoder_source = cw_display_source_get();
+        int16_t decoder_input = 0;
+        bool feed_decoder = true;
+        switch (decoder_source) {
+            case CW_DISPLAY_SOURCE_RX_AUDIO:
+                decoder_input = host_sample;
+                break;
+            case CW_DISPLAY_SOURCE_PADDLE_KEY:
+                decoder_input = paddle_active ? sidetone_sample : 0;
+                break;
+            case CW_DISPLAY_SOURCE_ALL:
+                decoder_input = host_sample;
+                if (paddle_active) {
+                    decoder_input = saturating_add_int16(decoder_input, sidetone_sample);
+                }
+                break;
+            case CW_DISPLAY_SOURCE_WINKEYER:
+            case CW_DISPLAY_SOURCE_NONE:
+            default:
+                /* Decoder is disabled for these modes; skip the cross-core write. */
+                feed_decoder = false;
+                break;
+        }
+        if (feed_decoder) {
+            cw_decoder_submit_audio(&decoder_input, 1);
+        }
+
         uint16_t sample = (uint16_t)mixed;
         audio_ring[render_frame] = ((uint32_t)sample << 16) | sample;
         render_frame = (render_frame + 1u) & (AUDIO_RING_FRAMES - 1u);
@@ -704,9 +740,6 @@ size_t audio_i2s_write_mono16(const int16_t *samples, size_t frame_count)
         frame_count = free_frames;
     }
 
-    /* Decode the unmuted RX/radio stream, before output gain and sidetone. */
-    cw_decoder_submit_audio(samples, frame_count);
-
     for (size_t i = 0; i < frame_count; ++i) {
         host_audio_ring[host_write_frame] = samples[i];
         host_write_frame =
@@ -720,6 +753,11 @@ size_t audio_i2s_write_mono16(const int16_t *samples, size_t frame_count)
 uint32_t audio_i2s_playback_queued_frames(void)
 {
     return host_queued_frames;
+}
+
+uint32_t audio_i2s_get_host_underrun_count(void)
+{
+    return host_underrun_count;
 }
 
 void audio_i2s_set_sidetone(bool enabled)

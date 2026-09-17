@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "control_console.h"
+#include "cw_text_display.h"
 #include "pico/multicore.h"
 #include "pico/platform.h"
 #include "pico/stdlib.h"
@@ -20,6 +21,9 @@
 #define EVENT_RING_SIZE 64u
 #define EVENT_RING_MASK (EVENT_RING_SIZE - 1u)
 #define TIMING_HISTORY_SIZE 20u
+
+/* Boosts quiet RX audio and paddle sidetone above the detection threshold. */
+#define INPUT_GAIN 4
 
 _Static_assert((SAMPLE_RING_SIZE & SAMPLE_RING_MASK) == 0u,
                "sample ring must be a power of two");
@@ -41,6 +45,8 @@ static volatile uint8_t estimated_wpm = 20u;
 static volatile uint8_t fixed_wpm;
 static uint8_t decimation_count;
 static int32_t decimation_sum;
+static volatile float last_signal_amplitude;
+static volatile float last_signal_threshold;
 
 static const struct {
     const char *pattern;
@@ -165,6 +171,12 @@ static void decoder_core(void)
     size_t window_count = 0u;
 
     while (true) {
+        /*
+         * Runs on core1 so all LCD/SPI drawing stays off core0, which must
+         * stay free to service the time-critical audio DMA ring.
+         */
+        cw_text_display_task();
+
         if (!decoder_enabled) {
             sample_read = sample_write;
             window_count = 0u;
@@ -223,13 +235,15 @@ static void decoder_core(void)
         }
         float amplitude = 2.0f * sqrtf(power) / (float)WINDOW_SAMPLES;
         float rms = sqrtf(energy / (float)WINDOW_SAMPLES);
-        float threshold = fmaxf(150.0f, noise_amplitude * (tone ? 2.2f : 3.0f));
+        float threshold = fmaxf(60.0f, noise_amplitude * (tone ? 2.2f : 3.0f));
         bool detected = amplitude > threshold && amplitude > (0.45f * rms);
+        last_signal_amplitude = amplitude;
+        last_signal_threshold = threshold;
 
         if (!tone && amplitude < noise_amplitude * 3.0f) {
             noise_amplitude = 0.995f * noise_amplitude + 0.005f * amplitude;
-            if (noise_amplitude < 30.0f) {
-                noise_amplitude = 30.0f;
+            if (noise_amplitude < 12.0f) {
+                noise_amplitude = 12.0f;
             }
         }
 
@@ -320,6 +334,7 @@ bool cw_decoder_init(void)
     event_write = 0u;
     event_read = 0u;
     dropped_samples = 0u;
+    decoder_enabled = true;
     multicore_launch_core1(decoder_core);
     return true;
 }
@@ -330,7 +345,13 @@ void cw_decoder_submit_audio(const int16_t *samples, size_t frame_count)
         return;
     }
     for (size_t i = 0u; i < frame_count; ++i) {
-        decimation_sum += samples[i];
+        int32_t boosted = (int32_t)samples[i] * INPUT_GAIN;
+        if (boosted > INT16_MAX) {
+            boosted = INT16_MAX;
+        } else if (boosted < INT16_MIN) {
+            boosted = INT16_MIN;
+        }
+        decimation_sum += boosted;
         if (++decimation_count != DECIMATION) {
             continue;
         }
@@ -362,12 +383,36 @@ void cw_decoder_task(void)
         } else {
             control_console_publish_cw_char(character);
         }
+        cw_text_display_put_char(character, false);
     }
 }
 
 void cw_decoder_set_enabled(bool enabled)
 {
     decoder_enabled = enabled;
+}
+
+/*
+ * Convert a Goertzel amplitude (measured after INPUT_GAIN) back to dBFS of
+ * the original, pre-gain signal, so 0 dBFS matches true full scale.
+ */
+static float amplitude_to_dbfs(float amplitude)
+{
+    float true_amplitude = amplitude / (float)INPUT_GAIN;
+    if (true_amplitude < 1.0f) {
+        true_amplitude = 1.0f;
+    }
+    return 20.0f * log10f(true_amplitude / 32768.0f);
+}
+
+float cw_decoder_get_signal_level(void)
+{
+    return amplitude_to_dbfs(last_signal_amplitude);
+}
+
+float cw_decoder_get_threshold(void)
+{
+    return amplitude_to_dbfs(last_signal_threshold);
 }
 
 bool cw_decoder_get_enabled(void)

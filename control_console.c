@@ -121,6 +121,14 @@ static void show_status(void)
         "decoder-dropped-samples: %lu\r\n",
         (unsigned long)cw_decoder_get_dropped_samples()
     );
+    tx_printf(
+        "usb-audio-queued-frames: %lu\r\n",
+        (unsigned long)audio_i2s_playback_queued_frames()
+    );
+    tx_printf(
+        "usb-audio-underruns: %lu\r\n",
+        (unsigned long)audio_i2s_get_host_underrun_count()
+    );
 }
 
 static void show_help(void)

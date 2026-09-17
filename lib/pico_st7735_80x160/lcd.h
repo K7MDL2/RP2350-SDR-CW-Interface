@@ -96,6 +96,8 @@ void LCD_ShowChinese(u16 x,u16 y,u8 index,u8 size,u16 color);
 void LCD_DrawPoint(u16 x,u16 y,u16 color);
 void LCD_DrawPoint_big(u16 x,u16 y,u16 color);
 void LCD_Fill(u16 xsta,u16 ysta,u16 xend,u16 yend,u16 color);
+/* Blits w*h pixels in one SPI burst (buffer: big-endian RGB565, w*h*2 bytes). */
+void LCD_BlitBuffer(u16 x, u16 y, u16 w, u16 h, const u8 *buffer);
 void LCD_DrawLine(u16 x1,u16 y1,u16 x2,u16 y2,u16 color);
 void LCD_DrawRectangle(u16 x1, u16 y1, u16 x2, u16 y2,u16 color);
 void Draw_Circle(u16 x0,u16 y0,u8 r,u16 color);
