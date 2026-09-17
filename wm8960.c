@@ -144,6 +144,47 @@ void wm8960_bus_init(
     gpio_pull_up(scl_pin);
 }
 
+/*
+ * The RP2040/RP2350 hardware I2C block can latch up after a NACK or a
+ * clock-stretch timeout: the peripheral (and sometimes the WM8960) is left
+ * mid-transaction and every subsequent transfer then fails immediately,
+ * with no recovery short of a power cycle. Bit-bang a standard I2C bus
+ * recovery (up to 9 clock pulses followed by a STOP) and reinitialize the
+ * peripheral so a single glitch does not permanently disable the codec.
+ */
+static void wm8960_i2c_bus_recover(wm8960_t *codec)
+{
+    i2c_deinit(codec->i2c);
+
+    gpio_set_function(codec->sda_pin, GPIO_FUNC_SIO);
+    gpio_set_function(codec->scl_pin, GPIO_FUNC_SIO);
+    gpio_set_dir(codec->sda_pin, GPIO_IN);
+    gpio_set_dir(codec->scl_pin, GPIO_OUT);
+    gpio_put(codec->scl_pin, 1);
+
+    for (int i = 0; i < 9 && !gpio_get(codec->sda_pin); ++i) {
+        gpio_put(codec->scl_pin, 0);
+        sleep_us(5);
+        gpio_put(codec->scl_pin, 1);
+        sleep_us(5);
+    }
+
+    /* Force a STOP condition: SDA low-to-high while SCL is high. */
+    gpio_set_dir(codec->sda_pin, GPIO_OUT);
+    gpio_put(codec->sda_pin, 0);
+    sleep_us(5);
+    gpio_put(codec->scl_pin, 1);
+    sleep_us(5);
+    gpio_put(codec->sda_pin, 1);
+    sleep_us(5);
+
+    i2c_init(codec->i2c, codec->i2c_baudrate);
+    gpio_set_function(codec->sda_pin, GPIO_FUNC_I2C);
+    gpio_set_function(codec->scl_pin, GPIO_FUNC_I2C);
+    gpio_pull_up(codec->sda_pin);
+    gpio_pull_up(codec->scl_pin);
+}
+
 bool wm8960_write_register(wm8960_t *codec, uint8_t reg, uint16_t value)
 {
     if (codec == NULL || codec->i2c == NULL || reg > 0x7F || value > 0x01FF) {
@@ -161,16 +202,26 @@ bool wm8960_write_register(wm8960_t *codec, uint8_t reg, uint16_t value)
         (uint8_t)(value & 0xFFu)
     };
 
-    const int transferred = i2c_write_timeout_us(
-        codec->i2c,
-        codec->address,
-        tx,
-        sizeof(tx),
-        false,
-        5000
-    );
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        const int transferred = i2c_write_timeout_us(
+            codec->i2c,
+            codec->address,
+            tx,
+            sizeof(tx),
+            false,
+            5000
+        );
 
-    return transferred == (int)sizeof(tx);
+        if (transferred == (int)sizeof(tx)) {
+            return true;
+        }
+
+        /* Transfer failed or stalled: unwedge the bus before retrying once. */
+        printf("WM8960: I2C stall on reg 0x%02X, recovering bus\r\n", reg);
+        wm8960_i2c_bus_recover(codec);
+    }
+
+    return false;
 }
 
 static bool configure_pll(wm8960_t *codec, wm8960_sample_rate_t sample_rate)
