@@ -154,10 +154,11 @@ void lcd_initialize(){
 
     /* Separates the active screen from the surrounding hardware bezel. */
     #define SCREEN_BORDER_THICKNESS 1u
-    LCD_Fill(0, 0, LCD_W() - 1, SCREEN_BORDER_THICKNESS - 1, RED);
-    LCD_Fill(0, LCD_H() - SCREEN_BORDER_THICKNESS, LCD_W() - 1, LCD_H() - 1, RED);
+    #define SCREEN_BORDER_RIGHT_X 149u
+    LCD_Fill(0, 0, SCREEN_BORDER_RIGHT_X, SCREEN_BORDER_THICKNESS - 1, RED);
+    LCD_Fill(0, LCD_H() - SCREEN_BORDER_THICKNESS, SCREEN_BORDER_RIGHT_X, LCD_H() - 1, RED);
     LCD_Fill(0, 0, SCREEN_BORDER_THICKNESS - 1, LCD_H() - 1, RED);
-    LCD_Fill(LCD_W() - SCREEN_BORDER_THICKNESS, 0, LCD_W() - 1, LCD_H() - 1, RED);
+    LCD_Fill(SCREEN_BORDER_RIGHT_X, 0, SCREEN_BORDER_RIGHT_X, LCD_H() - 1, RED);
 
     //sleep_ms(TimeStay);
     cw_text_display_init();

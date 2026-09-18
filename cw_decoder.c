@@ -22,6 +22,14 @@
 #define EVENT_RING_MASK (EVENT_RING_SIZE - 1u)
 #define TIMING_HISTORY_SIZE 20u
 
+/*
+ * Tuning indicator is now a simple in-band energy meter: it shows how
+ * strongly the incoming signal matches the decoder's own filter, rather
+ * than trying to infer a frequency offset.  See the comment in
+ * draw_level_bar().
+ */
+#define TUNE_BAR_UPDATE_MS 100u
+
 /* Boosts quiet RX audio and paddle sidetone above the detection threshold. */
 #define INPUT_GAIN 4
 
@@ -47,6 +55,9 @@ static uint8_t decimation_count;
 static int32_t decimation_sum;
 static volatile float last_signal_amplitude;
 static volatile float last_signal_threshold;
+static volatile float last_noise_level;
+static volatile float measured_frequency_hz;
+static volatile bool tone_active;
 
 static const struct {
     const char *pattern;
@@ -138,12 +149,41 @@ static float update_dot_estimate(
         return current_dot_ms;
     }
 
-    /* Maximum timing movement is 1% per accepted mark. */
-    float lower_limit = current_dot_ms * 0.90f;
-    float upper_limit = current_dot_ms * 1.10f;
+    /*
+     * Allow the estimate to move up to 20% per accepted mark so it converges
+     * on a new sender's speed quickly instead of creeping there slowly.
+     */
+    float lower_limit = current_dot_ms * 0.80f;
+    float upper_limit = current_dot_ms * 1.20f;
     if (candidate < lower_limit) candidate = lower_limit;
     if (candidate > upper_limit) candidate = upper_limit;
-    return 0.90f * current_dot_ms + 0.10f * candidate;
+    return 0.60f * current_dot_ms + 0.40f * candidate;
+}
+
+/*
+ * Explicit fast-learning phase for the first few marks after startup or a
+ * frequency change: apply a strong seed per mark so the estimate converges
+ * on the actual sender's speed within a handful of elements, before the
+ * history-based smoother takes over.  Marks are individual dit/dah
+ * elements, NOT key-up/key-down transitions - a long sustained tone must
+ * still count each element it contains, otherwise one long DAH would skew
+ * the estimate far too low and the smoother would take a long time to
+ * climb back up.
+ */
+#define LEARN_MARKS 10u
+static float learn_dot_estimate(
+    uint8_t *marks_seen,
+    uint16_t duration_ms,
+    float current_dot_ms)
+{
+    if (*marks_seen >= LEARN_MARKS) {
+        return current_dot_ms;
+    }
+    float seeded = (float)duration_ms;
+    if (seeded < 20.0f) seeded = 20.0f;
+    if (seeded > 500.0f) seeded = 500.0f;
+    ++*marks_seen;
+    return 0.30f * current_dot_ms + 0.70f * seeded;
 }
 
 static void decoder_core(void)
@@ -169,6 +209,9 @@ static void decoder_core(void)
     size_t pattern_length = 0u;
     int16_t window[WINDOW_SAMPLES];
     size_t window_count = 0u;
+    uint8_t learn_marks_seen = 0u;
+    bool learn_in_mark = false;
+    uint32_t learn_last_key_up_ms = 0u;
 
     while (true) {
         /*
@@ -185,6 +228,10 @@ static void decoder_core(void)
             state_ms = 0u;
             timing_history_count = 0u;
             timing_history_write = 0u;
+            measured_frequency_hz = 0.0f;
+            learn_marks_seen = 0u;
+            learn_in_mark = false;
+            learn_last_key_up_ms = 0u;
             dot_ms = fixed_wpm != 0u ? 1200.0f / (float)fixed_wpm : 60.0f;
             estimated_wpm = fixed_wpm != 0u ? fixed_wpm : 20u;
             sleep_ms(1u);
@@ -199,6 +246,7 @@ static void decoder_core(void)
         window[window_count++] = sample_ring[read];
         __dmb();
         sample_read = (read + 1u) & SAMPLE_RING_MASK;
+
         if (window_count != WINDOW_SAMPLES) {
             continue;
         }
@@ -210,6 +258,9 @@ static void decoder_core(void)
             );
             active_frequency = frequency;
             noise_amplitude = 100.0f;
+            learn_marks_seen = 0u;
+            learn_in_mark = false;
+            learn_last_key_up_ms = 0u;
         }
 
         uint8_t selected_wpm = fixed_wpm;
@@ -239,6 +290,8 @@ static void decoder_core(void)
         bool detected = amplitude > threshold && amplitude > (0.45f * rms);
         last_signal_amplitude = amplitude;
         last_signal_threshold = threshold;
+        last_noise_level = noise_amplitude;
+        measured_frequency_hz = detected ? (float)requested_frequency_hz : 0.0f;
 
         if (!tone && amplitude < noise_amplitude * 3.0f) {
             noise_amplitude = 0.995f * noise_amplitude + 0.005f * amplitude;
@@ -259,8 +312,35 @@ static void decoder_core(void)
             uint32_t duration_ms = state_ms;
             state_ms = 0u;
             tone = candidate;
+            tone_active = tone;
+
+            /*
+             * Learn from the inter-element gap between successive marks
+             * (the silence from key-up to the next key-down), which is a
+             * fixed 1-dit duration for standard CW regardless of how long
+             * the tone is held.  Using the gap avoids the long
+             * sustained-tone duration skew that would otherwise drag the
+             * estimate far too low.
+             */
+            if (tone && !learn_in_mark) {
+                learn_in_mark = true;
+                if (learn_last_key_up_ms != 0u && fixed_wpm == 0u) {
+                    uint32_t gap_ms = duration_ms - learn_last_key_up_ms;
+                    if (gap_ms >= 20u && gap_ms <= 500u) {
+                        dot_ms = learn_dot_estimate(
+                            &learn_marks_seen,
+                            (uint16_t)gap_ms,
+                            dot_ms
+                        );
+                    }
+                }
+            }
 
             if (!tone) {
+                if (learn_in_mark) {
+                    learn_in_mark = false;
+                    learn_last_key_up_ms = duration_ms;
+                }
                 if (duration_ms >= 20u && duration_ms <= 500u) {
                     if (fixed_wpm == 0u) {
                         dot_ms = update_dot_estimate(
@@ -434,9 +514,31 @@ uint16_t cw_decoder_get_frequency(void)
     return requested_frequency_hz;
 }
 
+float cw_decoder_get_frequency_offset(void)
+{
+    float measured = measured_frequency_hz;
+    float target = requested_frequency_hz != 0u
+        ? (float)requested_frequency_hz
+        : 750.0f;
+    if (measured < 1.0f || target < 1.0f) {
+        return 0.0f;
+    }
+    return measured - target;
+}
+
 uint8_t cw_decoder_get_wpm(void)
 {
     return estimated_wpm;
+}
+
+bool cw_decoder_get_tone_active(void)
+{
+    return tone_active;
+}
+
+float cw_decoder_get_noise_level(void)
+{
+    return amplitude_to_dbfs(last_noise_level);
 }
 
 bool cw_decoder_set_fixed_wpm(uint8_t wpm)

@@ -8,6 +8,7 @@
 
 #include "audio_i2s_test.h"
 #include "cw_decoder.h"
+#include "cw_display_source.h"
 #include "front_panel_controls.h"
 #include "settings_storage.h"
 #include "tusb.h"
@@ -29,6 +30,8 @@ static bool was_connected;
 static bool save_pending;
 static bool cw_line_active;
 static bool frequency_link = true;
+static uint32_t decoder_status_next_ms;
+static bool decoder_telemetry_enabled = true;
 
 static void tx_byte(uint8_t value)
 {
@@ -118,6 +121,10 @@ static void show_status(void)
         cw_decoder_get_fixed_wpm() == 0u ? "auto" : "fixed"
     );
     tx_printf(
+        "decoder-source: %s\r\n",
+        cw_display_source_name(cw_display_source_get())
+    );
+    tx_printf(
         "decoder-dropped-samples: %lu\r\n",
         (unsigned long)cw_decoder_get_dropped_samples()
     );
@@ -147,11 +154,12 @@ static void show_help(void)
         "  set mode iambic-a|iambic-b|ultimatic|bug\r\n"
         "  set paddle-swap on|off\r\n"
         "  set midi-ptt off|toggle|onoff\r\n"
-        "  midi-ptt off|toggle|onoff\r\n"
         "  set weight 0..100\r\n"
         "  set decoder on|off\r\n"
         "  set decoder-frequency 300..1200\r\n"
         "  set decoder-speed auto|5..60\r\n"
+        "  set decoder-telemetry on|off\r\n"
+        "  set decoder-source all|rx|key|wk|off\r\n"
         "  save\r\n"
         "  reload\r\n"
     );
@@ -284,6 +292,34 @@ static void command_set(const char *setting, const char *argument)
         } else {
             tx_text("ERROR decoder-speed must be auto or 5..60\r\n");
         }
+    } else if (strcmp(setting, "decoder-telemetry") == 0) {
+        if (strcmp(argument, "on") == 0) {
+            decoder_telemetry_enabled = true;
+            tx_text("OK decoder-telemetry=on\r\n");
+        } else if (strcmp(argument, "off") == 0) {
+            decoder_telemetry_enabled = false;
+            tx_text("OK decoder-telemetry=off\r\n");
+        } else {
+            tx_text("ERROR decoder-telemetry must be on or off\r\n");
+        }
+    } else if (strcmp(setting, "decoder-source") == 0) {
+        cw_display_source_t source;
+        if (strcmp(argument, "all") == 0) {
+            source = CW_DISPLAY_SOURCE_ALL;
+        } else if (strcmp(argument, "rx") == 0) {
+            source = CW_DISPLAY_SOURCE_RX_AUDIO;
+        } else if (strcmp(argument, "key") == 0) {
+            source = CW_DISPLAY_SOURCE_PADDLE_KEY;
+        } else if (strcmp(argument, "wk") == 0) {
+            source = CW_DISPLAY_SOURCE_WINKEYER;
+        } else if (strcmp(argument, "off") == 0) {
+            source = CW_DISPLAY_SOURCE_NONE;
+        } else {
+            tx_text("ERROR decoder-source must be all, rx, key, wk or off\r\n");
+            return;
+        }
+        cw_display_source_set(source);
+        tx_printf("OK decoder-source=%s\r\n", argument);
     } else if (strcmp(setting, "output") == 0) {
         wm8960_output_t output;
         if (strcmp(argument, "headphones") == 0) {
@@ -501,11 +537,27 @@ void control_console_task(void)
         tx_read = 0u;
         tx_write = 0u;
         tx_count = 0u;
+        decoder_status_next_ms = 0u;
         tx_text("\r\nRP2350 SDR CW Interface Console\r\nType help for commands.\r\ncw> ");
     }
     was_connected = connected;
     if (!connected || console_codec == NULL) {
         return;
+    }
+
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    if (cw_decoder_get_enabled() && decoder_telemetry_enabled &&
+        (int32_t)(now - decoder_status_next_ms) >= 0) {
+        decoder_status_next_ms = now + 500u;
+        tx_printf(
+            "\r\nDEC sig=%.1fdB thr=%.1fdB noise=%.1fdB tone=%d wpm=%u dropped=%lu",
+            (double)cw_decoder_get_signal_level(),
+            (double)cw_decoder_get_threshold(),
+            (double)cw_decoder_get_noise_level(),
+            cw_decoder_get_tone_active() ? 1 : 0,
+            cw_decoder_get_wpm(),
+            (unsigned long)cw_decoder_get_dropped_samples()
+        );
     }
 
     receive_task();

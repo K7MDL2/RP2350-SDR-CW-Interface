@@ -23,7 +23,14 @@ float cw_decoder_get_signal_level(void);
 float cw_decoder_get_threshold(void);
 bool cw_decoder_set_frequency(uint16_t frequency_hz);
 uint16_t cw_decoder_get_frequency(void);
+/*
+ * Signed offset of the currently detected tone from the decoder's target
+ * frequency, in Hz (positive = higher than center). 0 when no tone.
+ */
+float cw_decoder_get_frequency_offset(void);
 uint8_t cw_decoder_get_wpm(void);
+bool cw_decoder_get_tone_active(void);
+float cw_decoder_get_noise_level(void);
 bool cw_decoder_set_fixed_wpm(uint8_t wpm);
 uint8_t cw_decoder_get_fixed_wpm(void);
 uint32_t cw_decoder_get_dropped_samples(void);

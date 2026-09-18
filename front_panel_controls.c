@@ -14,8 +14,6 @@
 #include "pico/stdlib.h"
 #include "settings_storage.h"
 #include "winkey_emulator.h"
-#include "lcd_extra.h"
-#include "lcd.h"
 
 #define ENCODER_A_PIN BOARD_ENCODER_A_PIN
 #define ENCODER_B_PIN BOARD_ENCODER_B_PIN
@@ -35,32 +33,6 @@ typedef enum
     CONTROL_DECODER_SOURCE,
     CONTROL_NONE
 } control_selection_t;
-
-/* Output icons (headphone/speaker), stacked below the RX level bar. */
-#define OUTPUT_ICON_X          146u
-#define OUTPUT_ICON_WIDTH      12u
-#define OUTPUT_ICON_HEIGHT     9u
-#define OUTPUT_ICON_HP_Y       59u
-#define OUTPUT_ICON_SPK_Y      69u
-#define OUTPUT_ICON_ON_COLOR   BLUE
-#define OUTPUT_ICON_OFF_COLOR  LGRAY
-
-/*
- * Popup overlay covering the scrolling text area while a function is being
- * viewed/adjusted; cw_text_display_redraw() restores the text once it hides.
- */
-#define POPUP_X              2u
-#define POPUP_Y              2u
-#define POPUP_WIDTH          144u
-#define POPUP_HEIGHT         66u
-#define POPUP_LABEL_Y        (POPUP_Y + 4u)
-#define POPUP_BAR_Y          (POPUP_Y + 34u)
-#define POPUP_BAR_X          (POPUP_X + 4u)
-#define POPUP_BAR_WIDTH      (POPUP_WIDTH - 8u)
-#define POPUP_BAR_HEIGHT     24u
-#define POPUP_TEXT_COLOR     WHITE
-#define POPUP_BAR_FILL_COLOR GREEN
-#define POPUP_BAR_BACK_COLOR DARKGRAY
 
 /* Full-step quadrature decoder; four valid transitions produce one detent. */
 static const int8_t encoder_transition[16] = {
@@ -95,25 +67,10 @@ static int clamp_int(int value, int minimum, int maximum)
     return value;
 }
 
-static void draw_output_icon(uint16_t y, bool on)
-{
-    uint16_t color = on ? OUTPUT_ICON_ON_COLOR : OUTPUT_ICON_OFF_COLOR;
-    LCD_Fill(
-        OUTPUT_ICON_X,
-        y,
-        OUTPUT_ICON_X + OUTPUT_ICON_WIDTH - 1u,
-        y + OUTPUT_ICON_HEIGHT - 1u,
-        color
-    );
-}
-
 static void update_output_icons(void)
 {
-    draw_output_icon(
-        OUTPUT_ICON_HP_Y,
-        (front_panel_codec->output & WM8960_OUTPUT_HEADPHONES) != 0);
-    draw_output_icon(
-        OUTPUT_ICON_SPK_Y,
+    cw_text_display_set_output_icons(
+        (front_panel_codec->output & WM8960_OUTPUT_HEADPHONES) != 0,
         (front_panel_codec->output & WM8960_OUTPUT_SPEAKERS) != 0);
 }
 
@@ -124,15 +81,7 @@ static void hide_popup(void)
         return;
     }
     popup_visible = false;
-    LCD_Fill(
-        POPUP_X,
-        POPUP_Y,
-        POPUP_X + POPUP_WIDTH - 1u,
-        POPUP_Y + POPUP_HEIGHT - 1u,
-        BLACK
-    );
-    cw_text_display_set_suppressed(false);
-    cw_text_display_redraw();
+    cw_text_display_hide_popup();
 }
 
 static void arm_popup_timeout(void)
@@ -143,16 +92,7 @@ static void arm_popup_timeout(void)
 
 static void show_message_popup(const char *text)
 {
-    cw_text_display_set_suppressed(true);
-    LCD_Fill(
-        POPUP_X,
-        POPUP_Y,
-        POPUP_X + POPUP_WIDTH - 1u,
-        POPUP_Y + POPUP_HEIGHT - 1u,
-        BLACK
-    );
-    cw_text_display_draw_large_text(
-        POPUP_X + 4u, POPUP_LABEL_Y + 8u, text, POPUP_TEXT_COLOR);
+    cw_text_display_show_popup(text, 0.0f, false);
     arm_popup_timeout();
 }
 
@@ -228,20 +168,7 @@ static void show_function_popup(void)
     float fraction = 0.0f;
     selection_label_and_fraction(text, sizeof(text), &fraction);
 
-    cw_text_display_set_suppressed(true);
-    LCD_Fill(
-        POPUP_X,
-        POPUP_Y,
-        POPUP_X + POPUP_WIDTH - 1u,
-        POPUP_Y + POPUP_HEIGHT - 1u,
-        BLACK
-    );
-    cw_text_display_draw_large_text(
-        POPUP_X + 4u, POPUP_LABEL_Y, text, POPUP_TEXT_COLOR);
-    cw_text_display_draw_bar(
-        POPUP_BAR_X, POPUP_BAR_Y, POPUP_BAR_WIDTH, POPUP_BAR_HEIGHT,
-        fraction, POPUP_BAR_FILL_COLOR, POPUP_BAR_BACK_COLOR
-    );
+    cw_text_display_show_popup(text, fraction, true);
     arm_popup_timeout();
 }
 

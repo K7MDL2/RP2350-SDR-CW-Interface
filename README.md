@@ -194,6 +194,8 @@ set decoder off
 set decoder-frequency 300..1200
 set decoder-speed auto
 set decoder-speed 5..60
+set decoder-telemetry on|off
+set decoder-source all|rx|key|wk|off
 
 save
 reload

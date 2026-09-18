@@ -10,7 +10,6 @@
 #include "cw_decoder.h"
 #include "cw_display_source.h"
 #include "lcd.h"
-#include "lcd_extra.h"
 #include "pico/time.h"
 
 /* 8x16 standard font bitmap, defined once in lcd.c (via oledfont.h). */
@@ -34,24 +33,26 @@ extern const u8 asc2_1608[1520];
 #define CW_TEXT_COLOR      GREEN
 #define CW_TEXT_ALL_ROWS_MASK ((1u << CW_TEXT_ROWS) - 1u)
 
-/* Signal level bar in the slim column freed up on the right of the screen. */
-#define CW_LEVEL_BAR_X          151u
+/*
+ * CW tuning indicator and output icons live just right of the content box,
+ * whose right border is at x=149.  The meter's outline box starts at x=151
+ * so its left edge sits just past the border with a 1px gap.
+ */
+#define CW_LEVEL_BAR_X          152u
 #define CW_LEVEL_BAR_WIDTH      5u
 #define CW_LEVEL_BAR_TOP        2u
 #define CW_LEVEL_BAR_HEIGHT     56u
-#define CW_LEVEL_BAR_MIN_DBFS   -60.0f
-#define CW_LEVEL_BAR_MAX_DBFS   0.0f
 #define CW_LEVEL_BAR_UPDATE_MS  100u
-#define CW_LEVEL_BAR_FILL_COLOR GREEN
-#define CW_LEVEL_BAR_BACK_COLOR BLACK
-#define CW_LEVEL_TICK_COLOR     RED
+#define CW_TUNE_FILL_COLOR      GREEN
+#define CW_TUNE_BACK_COLOR      BLACK
+#define CW_TUNE_CENTER_COLOR    WHITE
 
 /* Output icons (headphone/speaker), stacked below the RX level bar. */
-#define OUTPUT_ICON_X          150u
+#define OUTPUT_ICON_X          151u
 #define OUTPUT_ICON_WIDTH      7u
 #define OUTPUT_ICON_HEIGHT     9u
-#define OUTPUT_ICON_HP_Y       59u
-#define OUTPUT_ICON_SPK_Y      69u
+#define OUTPUT_ICON_HP_Y       60u
+#define OUTPUT_ICON_SPK_Y      70u
 #define OUTPUT_ICON_ON_COLOR   BLUE
 #define OUTPUT_ICON_OFF_COLOR  LGRAY
 
@@ -61,7 +62,7 @@ extern const u8 asc2_1608[1520];
  */
 #define POPUP_X              2u
 #define POPUP_Y              2u
-#define POPUP_WIDTH          144u
+#define POPUP_WIDTH          146u
 #define POPUP_HEIGHT         66u
 #define POPUP_LABEL_Y        (POPUP_Y + 4u)
 #define POPUP_MESSAGE_Y      (POPUP_Y + 12u)
@@ -199,50 +200,56 @@ void cw_text_display_set_suppressed(bool value)
     suppressed = value;
 }
 
-static uint16_t level_to_pixels(float level_dbfs)
-{
-    if (level_dbfs < CW_LEVEL_BAR_MIN_DBFS) {
-        level_dbfs = CW_LEVEL_BAR_MIN_DBFS;
-    } else if (level_dbfs > CW_LEVEL_BAR_MAX_DBFS) {
-        level_dbfs = CW_LEVEL_BAR_MAX_DBFS;
-    }
-    float span = CW_LEVEL_BAR_MAX_DBFS - CW_LEVEL_BAR_MIN_DBFS;
-    return (uint16_t)(((level_dbfs - CW_LEVEL_BAR_MIN_DBFS) / span) *
-(float)CW_LEVEL_BAR_HEIGHT);
-}
-
 static void draw_level_bar(void)
 {
-    uint16_t fill_pixels = level_to_pixels(cw_decoder_get_signal_level());
+    /*
+     * Energy meter: fill height follows the decoder's own in-band signal
+     * amplitude (dBFS), and a white center line marks the decoder's current
+     * detection threshold.  A tone that passes the decoder's gate sits
+     * above the threshold line, so the bar is full-scale exactly when the
+     * decoder is capturing it.
+     */
+    float level_dbfs = cw_decoder_get_signal_level();
+    float threshold_dbfs = cw_decoder_get_threshold();
+    float min_dbfs = -60.0f;
+    float max_dbfs = 0.0f;
+    float span = max_dbfs - min_dbfs;
+
+    if (level_dbfs < min_dbfs) level_dbfs = min_dbfs;
+    if (level_dbfs > max_dbfs) level_dbfs = max_dbfs;
+    uint16_t fill_pixels =
+        (uint16_t)(((level_dbfs - min_dbfs) / span) * (float)CW_LEVEL_BAR_HEIGHT);
     uint16_t fill_top = (uint16_t)(CW_LEVEL_BAR_TOP + CW_LEVEL_BAR_HEIGHT - fill_pixels);
 
+    LCD_Fill(
+        CW_LEVEL_BAR_X,
+        CW_LEVEL_BAR_TOP,
+        CW_LEVEL_BAR_X + CW_LEVEL_BAR_WIDTH - 1u,
+        CW_LEVEL_BAR_TOP + CW_LEVEL_BAR_HEIGHT - 1u,
+        CW_TUNE_BACK_COLOR
+    );
     if (fill_pixels != 0u) {
         LCD_Fill(
             CW_LEVEL_BAR_X,
             fill_top,
             CW_LEVEL_BAR_X + CW_LEVEL_BAR_WIDTH - 1u,
             CW_LEVEL_BAR_TOP + CW_LEVEL_BAR_HEIGHT - 1u,
-            CW_LEVEL_BAR_FILL_COLOR
-        );
-    }
-    if (fill_top > CW_LEVEL_BAR_TOP) {
-        LCD_Fill(
-            CW_LEVEL_BAR_X,
-            CW_LEVEL_BAR_TOP,
-            CW_LEVEL_BAR_X + CW_LEVEL_BAR_WIDTH - 1u,
-            fill_top - 1u,
-            CW_LEVEL_BAR_BACK_COLOR
+            CW_TUNE_FILL_COLOR
         );
     }
 
-    uint16_t tick_pixels = level_to_pixels(cw_decoder_get_threshold());
-    uint16_t tick_y = (uint16_t)(CW_LEVEL_BAR_TOP + CW_LEVEL_BAR_HEIGHT - 1u - tick_pixels);
+    if (threshold_dbfs < min_dbfs) threshold_dbfs = min_dbfs;
+    if (threshold_dbfs > max_dbfs) threshold_dbfs = max_dbfs;
+    uint16_t tick_pixels =
+        (uint16_t)(((threshold_dbfs - min_dbfs) / span) * (float)CW_LEVEL_BAR_HEIGHT);
+    uint16_t tick_y =
+        (uint16_t)(CW_LEVEL_BAR_TOP + CW_LEVEL_BAR_HEIGHT - 1u - tick_pixels);
     LCD_DrawLine(
         CW_LEVEL_BAR_X,
         tick_y,
         CW_LEVEL_BAR_X + CW_LEVEL_BAR_WIDTH - 1u,
         tick_y,
-        CW_LEVEL_TICK_COLOR
+        CW_TUNE_CENTER_COLOR
     );
 }
 
