@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "audio_i2s_test.h"
+#include "cw_display_source.h"
 #include "hardware/flash.h"
 #include "hardware/regs/addressmap.h"
 #include "pico/flash.h"
@@ -12,8 +13,8 @@
 #include "winkey_emulator.h"
 
 #define SETTINGS_MAGIC             0x52424b59u /* "RBKY" */
-#define SETTINGS_FORMAT_VERSION    3u
-#define SETTINGS_PREVIOUS_VERSION  2u
+#define SETTINGS_FORMAT_VERSION    4u
+#define SETTINGS_PREVIOUS_VERSION  3u
 #define SETTINGS_LEGACY_VERSION    1u
 #define SETTINGS_RECORD_BYTES      (2u * FLASH_PAGE_SIZE)
 #define SETTINGS_STORAGE_BYTES     (2u * FLASH_SECTOR_SIZE)
@@ -30,6 +31,7 @@ typedef struct {
     uint16_t sidetone_frequency_hz;
     uint8_t output_mode;
     uint8_t midi_ptt_mode;
+    uint8_t decoder_source;
     uint8_t winkey_eeprom[WINKEY_PERSISTENT_EEPROM_SIZE];
 } settings_payload_t;
 
@@ -64,7 +66,7 @@ typedef struct {
     ];
 } settings_legacy_record_t;
 
-_Static_assert(sizeof(settings_payload_t) == 262u,
+_Static_assert(sizeof(settings_payload_t) == 264u,
                "Unexpected persistent settings payload size");
 _Static_assert(sizeof(settings_legacy_payload_t) == 260u,
                "Unexpected legacy settings payload size");
@@ -125,6 +127,7 @@ static bool payload_is_sane(const settings_payload_t *payload)
            payload->output_mode >= WM8960_OUTPUT_HEADPHONES &&
            payload->output_mode <= WM8960_OUTPUT_BOTH &&
            payload->midi_ptt_mode <= WINKEY_MIDI_PTT_THETIS &&
+           payload->decoder_source < CW_DISPLAY_SOURCE_COUNT &&
            payload->winkey_eeprom[0] == 0xa5u;
 }
 
@@ -208,6 +211,7 @@ static void capture_payload(settings_payload_t *payload)
         winkey_emulator_get_sidetone_frequency();
     payload->output_mode = (uint8_t)storage_codec->output;
     payload->midi_ptt_mode = (uint8_t)winkey_emulator_get_midi_ptt_mode();
+    payload->decoder_source = (uint8_t)cw_display_source_get();
     winkey_emulator_export_eeprom(payload->winkey_eeprom);
 }
 
@@ -221,6 +225,7 @@ static void convert_legacy_payload(
     payload->sidetone_frequency_hz = legacy->sidetone_frequency_hz;
     payload->output_mode = WM8960_OUTPUT_BOTH;
     payload->midi_ptt_mode = WINKEY_MIDI_PTT_PIHPSDR;
+    payload->decoder_source = (uint8_t)CW_DISPLAY_SOURCE_ALL;
     memcpy(
         payload->winkey_eeprom,
         legacy->winkey_eeprom,
@@ -257,6 +262,7 @@ static bool apply_payload(const settings_payload_t *payload)
     winkey_emulator_set_sidetone_frequency(
         payload->sidetone_frequency_hz
     );
+    cw_display_source_set((cw_display_source_t)payload->decoder_source);
     return true;
 }
 
@@ -313,7 +319,8 @@ bool settings_storage_init(wm8960_t *codec)
             memcpy(&restored, &selected->payload, sizeof(restored));
         } else if (selected->format_version == SETTINGS_PREVIOUS_VERSION) {
             memcpy(&restored, &selected->payload, sizeof(restored));
-            restored.midi_ptt_mode = WINKEY_MIDI_PTT_PIHPSDR;
+            /* v3 records predate decoder_source; default to ALL. */
+            restored.decoder_source = (uint8_t)CW_DISPLAY_SOURCE_ALL;
         } else {
             const settings_legacy_record_t *legacy =
                 (const settings_legacy_record_t *)selected;

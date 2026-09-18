@@ -31,7 +31,7 @@ static bool save_pending;
 static bool cw_line_active;
 static bool frequency_link = true;
 static uint32_t decoder_status_next_ms;
-static bool decoder_telemetry_enabled = true;
+static bool decoder_telemetry_enabled;
 
 static void tx_byte(uint8_t value)
 {

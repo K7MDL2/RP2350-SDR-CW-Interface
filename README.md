@@ -218,6 +218,10 @@ receive pitch must temporarily differ from the local sidetone. The command
 Only the sidetone portion and therefore the linked startup value is currently
 persistent when `save` is used; the off state itself is session-only.
 
+`set decoder-telemetry on|off` is not saved and on startup is off.  Turn it on to get CW decoder metrics every 500ms on the serial terminal.  This is intended for development, not useful for normal operation.
+
+If you have a LCD screen `set decoder-source all|rx|key|wk|off` selects among avaiable text sources to display on the LCD.  This can be RX audio, paddle or straight key (via CW decoder) decoded text, Winkeyer serial text, none (off), or all sources.
+
 For example:
 
 ```text
