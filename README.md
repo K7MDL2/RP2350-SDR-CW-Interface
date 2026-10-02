@@ -1,20 +1,20 @@
-| Support Hardware | ![Pico2][Pico2] | ![Pico2W][Pico2W] | ![WM9860 Audio HAT][WM8960_HAT] | ![ST7735 OLED][ST7735_OLED] |
+| Support Hardware | ![Pico2][Pico2] | ![Pico2W][Pico2W] | ![WM9860HAT][WM8960HAT] | ![ST7735-OLED][ST7735OLED] |
 | --- | --- | --- | --- | --- |
 
-| Dev Environment Used | ![Visual Studio Code with Pico extension][VSCode] | ![Pico SDK 2.3][Pico_SDK]|
+| Dev Environment Used | ![VSCode][VSCode] | ![Pico SDK 2.3][Pico_SDK]|
 | --- | --- | --- |
 
 [Pico2W]: https://img.shields.io/badge/Pico2W-green "Pico2W"
-[Pico2]: https://img.shields.io/badge/Pico-orange "Pico2"
-[VSCode]: https://img.shields.io/badge/Visual-Studio-Code-with-Pico-extension-cyan "Visual Studio Code with Pico extension"
-[Pico_SDK]: https://img.shields.io/badge/Pico-SDK-2.3-cyan "Pico SDK 2.3"
-
-[WM8960_HAT]: https://img.shields.io/badge/WM8960-HAT-violet "WM8960_HAT"
-[ST7735_OLED]: https://img.shields.io/badge/ST7735-violet "ST7735_OLED"
+[Pico2]: https://img.shields.io/badge/Pico2-orange "Pico2"
+[WM8960HAT]: https://img.shields.io/badge/WM8960_HAT-violet "WM8960HAT"
+[ST7735OLED]: https://img.shields.io/badge/ST7735_OLED-blue "ST7735_OLED"
+[VSCode]: https://img.shields.io/badge/Visual_Studio_Code_with_Pico_extension-cyan "Visual Studio Code with Pico extension"
+[Pico_SDK]: https://img.shields.io/badge/Pico_SDK_2.3-violet "Pico SDK 2.3"
 
 # RP2350 SDR CW Interface
 
-Fork Changes: Added ST7735 OLED display that displays menu and decoded CW text from RX audio, paddles, straight key, and direct from Winkeyer. Also adds a new MIDI encoder output message useful for VFO tuning. 
+> [!NOTE]
+> Fork Changes:  Added an ST7735 OLED display that displays menu and decoded CW text from RX audio, paddles, straight key, and direct from Winkeyer. Also adds a new MIDI encoder output message useful for VFO tuning.   A WM8960 SPI module can be wired to a standard Pico2/Pico2W board and display in place of the Pico-PiZero and Audio/Display HAT configuration used here.
 
 > [!NOTE]
 > The GPIO pn assignments are specified in board_pins.h file.  The below text mentions pin numbers from the original project and depending on your hardware used, such as an embedded SPI OLED display, or an external touch TFT or OLED display, the wiring assignments must be customized to match your hardware.
