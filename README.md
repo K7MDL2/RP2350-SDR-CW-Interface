@@ -498,6 +498,11 @@ Hz. Frequencies above 1000 Hz are reported as 1000 Hz because that is the
 piHPSDR action limit. Stock Thetis has no MIDI action for CW Pitch, so its CW
 Pitch must be set manually to the same value as the keyer.
 
+To enable MIDI frequency updates to a PC, uncomment this #define at top of winkey_emulator.h
+//#define SEND_MIDI_FREQUENCY  // enable to allow frequent updates to PC about current sidetone frequency value
+
+Not all programs can use this control message and having it active can make it hard to configure MIDI command assignments as the updates erase attempts to make assignments on other controls.  It is disabled by default.
+
 For a manual key-down test, send the following MIDI message:
 
 ```text
