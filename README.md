@@ -14,7 +14,7 @@
 # RP2350 SDR CW Interface
 
 > [!NOTE]
-> Fork Changes:  Added an ST7735 OLED display that displays menu and decoded CW text from RX audio, paddles, straight key, and direct from Winkeyer. Also adds a new MIDI encoder output message useful for VFO tuning.   A WM8960 SPI module can be wired to a standard Pico2/Pico2W board and display in place of the Pico-PiZero and Audio/Display HAT configuration used here.
+> Changes in this fork of PA3GSB project:  Added an ST7735 OLED display that displays menu and decoded CW text from RX audio, paddles, straight key, and direct from Winkeyer. Also adds a new MIDI encoder output message useful for VFO tuning.   A WM8960 SPI module can be wired to a standard Pico2/Pico2W board and display in place of the Pico-PiZero and Audio/Display HAT configuration used here.
 
 > [!NOTE]
 > The GPIO pn assignments are specified in board_pins.h file.  The below text mentions pin numbers from the original project and depending on your hardware used, such as an embedded SPI OLED display, or an external touch TFT or OLED display, the wiring assignments must be customized to match your hardware.
