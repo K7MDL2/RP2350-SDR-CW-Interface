@@ -1,4 +1,25 @@
+| Support Hardware | ![Pico2][Pico2] | ![Pico2W][Pico2W] | ![WM9860 Audio HAT][WM8960_HAT] | ![ST7735 OLED][ST7735_OLED] |
+| --- | --- | --- | --- | --- |
+
+| Dev Environment Used | ![Visual Studio Code with Pico extension][VSCode] | ![Pico SDK 2.3][Pico_SDK]|
+| --- | --- | --- |
+
+[Pico2W]: https://img.shields.io/badge/Pico2W-green "Pico2W"
+[Pico2]: https://img.shields.io/badge/Pico-orange "Pico2"
+[VSCode]: https://img.shields.io/badge/Visual-Studio-Code-with-Pico-extension-cyan "Visual Studio Code with Pico extension"
+[Pico_SDK]: https://img.shields.io/badge/Pico-SDK-2.3-cyan "Pico SDK 2.3"
+
+[WM8960_HAT]: https://img.shields.io/badge/WM8960-HAT-violet "WM8960_HAT"
+[ST7735_OLED]: https://img.shields.io/badge/ST7735-violet "ST7735_OLED"
+
 # RP2350 SDR CW Interface
+
+Fork Changes: Added ST7735 OLED display that displays menu and decoded CW text from RX audio, paddles, straight key, and direct from Winkeyer. Also adds a new MIDI encoder output message useful for VFO tuning. 
+
+> [!NOTE]
+> The GPIO pn assignments are specified in board_pins.h file.  The below text mentions pin numbers from the original project and depending on your hardware used, such as an embedded SPI OLED display, or an external touch TFT or OLED display, the wiring assignments must be customized to match your hardware.
+
+____________________________________________________________________________________
 
 CW keyer for radios with MIDI control and USB sound-card input and output,
 running on a Waveshare RP2350-PiZero with a WM8960 Audio HAT.
