@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+//#define SEND_MIDI_FREQUENCY  // enable to allow frequent updates to PC about current sidetone frequency value
+
 #define WINKEY_PERSISTENT_EEPROM_SIZE 256u
 
 typedef enum {
@@ -25,6 +27,7 @@ extern "C" {
 
 void winkey_emulator_init(void);
 void winkey_emulator_task(void);
+void winkey_emulator_send_midi_wheel_step(int direction);
 void winkey_emulator_set_speed(uint8_t wpm);
 uint8_t winkey_emulator_get_speed(void);
 void winkey_emulator_set_sidetone_frequency(uint16_t frequency_hz);

@@ -138,11 +138,15 @@ the resistor. The short lead is the cathode and connects to GND.
 5. Copy `rp2350-sdr-cw-interface.uf2` to that drive.
 6. The RP2350 automatically restarts as the CW keyer.
 
-The locally built firmware is located at:
+The default VS Code build produces firmware at:
 
 ```text
-build-audio-duplex-cdc-midi/rp2350-sdr-cw-interface.uf2
+build/rp2350-sdr-cw-interface.uf2
 ```
+
+The separate `build-audio-duplex-cdc-midi` directory is only updated when
+explicitly building that configuration. Do not flash an older UF2 from that
+directory after building the default VS Code target.
 
 ## USB devices
 
@@ -353,7 +357,10 @@ wiring.
 
 ## Encoder controls
 
-At startup, all function LEDs are off and rotating the encoder has no effect.
+At startup, no local function is selected and rotating the encoder sends MIDI
+Control Change 20 jog-wheel steps on channel 10 (value 1 for increment,
+127 for decrement). Configure the receiving application for a relative
+two's-complement wheel, not an absolute slider.
 The GPIO24 and GPIO25 status LEDs immediately show the restored output routing.
 Each short press of the encoder selects the next function:
 
@@ -476,6 +483,7 @@ The firmware sends the following events on MIDI channel 10:
 | CW key-down/up | Note 17 |
 | PTT (piHPSDR mode) | Note 18 On/Off |
 | Toggle PTT mode | Note 18 On at both PTT edges |
+| Encoder with no local function selected | Control Change 20, relative value 1 (increment) / 127 (decrement) |
 | Sidetone frequency | Control Change 3 (300..1000 Hz mapped to 0..127) |
 
 The virtual MIDI PTT factory default is `off`, which is the safe setting for

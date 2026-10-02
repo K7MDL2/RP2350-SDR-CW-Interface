@@ -34,6 +34,7 @@
 #define WINKEY_MIDI_CHANNEL        10u
 #define WINKEY_MIDI_KEY_NOTE       17u
 #define WINKEY_MIDI_PTT_NOTE       18u
+#define WINKEY_MIDI_WHEEL_CC       20u
 #define WINKEY_MIDI_FREQUENCY_CC   3u
 
 #define WINKEY_BUFFER_LENGTH       128u
@@ -314,6 +315,16 @@ static void midi_send_control_change(uint8_t control, uint8_t value)
     (void)control;
     (void)value;
 #endif
+}
+
+void winkey_emulator_send_midi_wheel_step(int direction)
+{
+    if (direction != 0) {
+        midi_send_control_change(
+            WINKEY_MIDI_WHEEL_CC,
+            direction > 0 ? 127u : 1u
+        );
+    }
 }
 
 static uint8_t midi_frequency_value(uint16_t frequency_hz)
@@ -712,10 +723,12 @@ static void keyer_task(void)
         (uint32_t)(now_ms - last_frequency_report_ms) >= 10000u) {
         old_midi_frequency = reported_frequency;
         last_frequency_report_ms = now_ms;
+        #ifdef SEND_MIDI_FREQUENCY
         midi_send_control_change(
             WINKEY_MIDI_FREQUENCY_CC,
             reported_frequency
         );
+        #endif
     }
 
     if ((effective_dit || effective_dah || manual_key) &&

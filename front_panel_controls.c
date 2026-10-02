@@ -308,6 +308,8 @@ static void apply_encoder_step(int direction)
     }
 
     case CONTROL_NONE:
+        winkey_emulator_send_midi_wheel_step(direction);
+        return;
     default:
         return;
     }
