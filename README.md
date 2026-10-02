@@ -19,6 +19,7 @@
 > [!NOTE]
 > The GPIO pn assignments are specified in board_pins.h file.  The below text mentions pin numbers from the original project and depending on your hardware used, such as an embedded SPI OLED display, or an external touch TFT or OLED display, the wiring assignments must be customized to match your hardware.
 
+I initially compiled with Pico SDK2.3.0 on command line.  Now I edit and build completely within VS Code with the Pico extension with github sync.
 ____________________________________________________________________________________
 
 CW keyer for radios with MIDI control and USB sound-card input and output,
