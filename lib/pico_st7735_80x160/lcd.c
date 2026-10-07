@@ -7,8 +7,13 @@
 #include "oledfont.h"
 
 // Macro definitions
+#ifdef HALDZEMO_ST7789_170x320
+#define LCD_WIDTH 320
+#define LCD_HEIGHT 170
+#else
 #define LCD_WIDTH 160
 #define LCD_HEIGHT 80
+#endif
 
 #define OLED_CS_Clr() gpio_put(_config.pin_cs, 0)
 #define OLED_CS_Set() gpio_put(_config.pin_cs, 1)
@@ -411,7 +416,11 @@ void LCD_SetRotation(u8 rot)
     else if(_rotation==2)
         LCD_WR_DATA8((0x70 ^ (_config.x_mirror<<6)) | (_config.rgb_order<<3));
     else
+#ifdef HALDZEMO_ST7789_170x320
+        LCD_WR_DATA8((0x40 ^ (_config.x_mirror<<7)) | (_config.rgb_order<<3));
+#else
         LCD_WR_DATA8((0xA0 ^ (_config.x_mirror<<6)) | (_config.rgb_order<<3));
+#endif
 }
 
 u16 LCD_W()

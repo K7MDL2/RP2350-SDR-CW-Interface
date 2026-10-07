@@ -154,7 +154,11 @@ void lcd_initialize(){
 
     /* Separates the active screen from the surrounding hardware bezel. */
     #define SCREEN_BORDER_THICKNESS 1u
+#ifdef HALDZEMO_ST7789_170x320
+    #define SCREEN_BORDER_RIGHT_X 309u
+#else
     #define SCREEN_BORDER_RIGHT_X 149u
+#endif
     LCD_Fill(0, 0, SCREEN_BORDER_RIGHT_X, SCREEN_BORDER_THICKNESS - 1, RED);
     LCD_Fill(0, LCD_H() - SCREEN_BORDER_THICKNESS, SCREEN_BORDER_RIGHT_X, LCD_H() - 1, RED);
     LCD_Fill(0, 0, SCREEN_BORDER_THICKNESS - 1, LCD_H() - 1, RED);

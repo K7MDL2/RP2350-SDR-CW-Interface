@@ -23,8 +23,13 @@ extern const u8 asc2_1608[1520];
  * readability. No title bar and no LED row anymore, so the whole screen
  * (minus a slim right-hand meter/icon column) is available.
  */
+#ifdef HALDZEMO_ST7789_170x320
+#define CW_TEXT_ROWS       7u
+#define CW_TEXT_COLS       19u
+#else
 #define CW_TEXT_ROWS       3u
 #define CW_TEXT_COLS       9u
+#endif
 #define CW_TEXT_LEFT_X     2u
 #define CW_TEXT_TOP_Y      2u
 #define CW_TEXT_GLYPH_W    16u
@@ -38,21 +43,35 @@ extern const u8 asc2_1608[1520];
  * whose right border is at x=149.  The meter's outline box starts at x=151
  * so its left edge sits just past the border with a 1px gap.
  */
+#ifdef HALDZEMO_ST7789_170x320
+#define CW_LEVEL_BAR_X          312u
+#define CW_LEVEL_BAR_WIDTH      7u
+#define CW_LEVEL_BAR_HEIGHT     115u
+#else
 #define CW_LEVEL_BAR_X          152u
 #define CW_LEVEL_BAR_WIDTH      5u
-#define CW_LEVEL_BAR_TOP        2u
 #define CW_LEVEL_BAR_HEIGHT     56u
+#endif
+#define CW_LEVEL_BAR_TOP        2u
 #define CW_LEVEL_BAR_UPDATE_MS  100u
 #define CW_TUNE_FILL_COLOR      GREEN
 #define CW_TUNE_BACK_COLOR      BLACK
 #define CW_TUNE_CENTER_COLOR    WHITE
 
 /* Output icons (headphone/speaker), stacked below the RX level bar. */
+#ifdef HALDZEMO_ST7789_170x320
+#define OUTPUT_ICON_X          311u
+#define OUTPUT_ICON_WIDTH      11u
+#define OUTPUT_ICON_HEIGHT     22u
+#define OUTPUT_ICON_HP_Y       122u
+#define OUTPUT_ICON_SPK_Y      147u
+#else
 #define OUTPUT_ICON_X          151u
 #define OUTPUT_ICON_WIDTH      7u
 #define OUTPUT_ICON_HEIGHT     9u
 #define OUTPUT_ICON_HP_Y       60u
 #define OUTPUT_ICON_SPK_Y      70u
+#endif
 #define OUTPUT_ICON_ON_COLOR   BLUE
 #define OUTPUT_ICON_OFF_COLOR  LGRAY
 
@@ -62,7 +81,11 @@ extern const u8 asc2_1608[1520];
  */
 #define POPUP_X              2u
 #define POPUP_Y              2u
+#ifdef HALDZEMO_ST7789_170x320
+#define POPUP_WIDTH          306u
+#else
 #define POPUP_WIDTH          146u
+#endif
 #define POPUP_HEIGHT         66u
 #define POPUP_LABEL_Y        (POPUP_Y + 4u)
 #define POPUP_MESSAGE_Y      (POPUP_Y + 12u)
