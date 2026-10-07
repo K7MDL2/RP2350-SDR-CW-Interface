@@ -10,8 +10,16 @@ typedef char  i8;
 typedef short i16;
 typedef long  i32;
 
+// Leave below lines commented out when using Seengreat WM8960+ST7735 TFT 0.96" display
+//#define HALDZEMO_ST7789_170x320 1
+//#define XIITIA_ST7735_80x160 1
+
 #ifndef SPI_CLK_FREQ_DEFAULT
+#ifdef HALDZEMO_ST7789_170x320
+#define SPI_CLK_FREQ_DEFAULT        (100 * MHZ)
+#else
 #define SPI_CLK_FREQ_DEFAULT        (50 * MHZ)
+#endif
 #endif
 
 #ifndef SPI_INST_DEFAULT
@@ -51,13 +59,27 @@ typedef long  i32;
 #define PIN_LCD_RST_WAVESHARE_A       25  // any GPIO
 #define PIN_LCD_BLK_WAVESHARE_A        4  // any GPIO
 
-#define PWM_BLK_DEFAULT             true  // false: GPIO output, true: PWM output
+#if defined(XIITIA_ST7735_80x160)
+#define H_OFS_DEFAULT                0  // 0, +1
+#define V_OFS_DEFAULT               +24  // +24, +26
+#define INVERSION_DEFAULT           false  // false: non-color-inversion, true: color-inversion
+#define RGB_ORDER_DEFAULT           1   // 0: RGB, 1: BGR
+#elif defined(HALDZEMO_ST7789_170x320)
+#define H_OFS_DEFAULT               +0  // 0, +1
+#define V_OFS_DEFAULT               +35  // +24, +26
+#define INVERSION_DEFAULT           true  // false: non-color-inversion, true: color-inversion
+#define RGB_ORDER_DEFAULT           0   // 0: RGB, 1: BGR
+#else
+#define INVERSION_DEFAULT           true  // false: non-color-inversion, true: color-inversion
+#define H_OFS_DEFAULT               +1  // 0, +1
+#define V_OFS_DEFAULT               +26  // +24, +26
 #define INVERSION_DEFAULT           true  // false: non-color-inversion, true: color-inversion
 #define RGB_ORDER_DEFAULT           1   // 0: RGB, 1: BGR
-#define ROTATION_DEFAULT            1
+#endif
 
-#define H_OFS_DEFAULT                +1  // 0, +1
-#define V_OFS_DEFAULT               +26  // +24, +26
+
+#define PWM_BLK_DEFAULT             true  // false: GPIO output, true: PWM output
+#define ROTATION_DEFAULT            1
 
 #define X_MIRROR_DEFAULT            0    // 0: non-x-mirror, 1: x-mirror
 
